@@ -87,7 +87,6 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const handleStartCall = useCallback(
     async (withSystemAudio: boolean) => {
       connect();
-      // Small delay to allow WS to open before sending message
       await new Promise((r) => setTimeout(r, 300));
       await startCapture(withSystemAudio);
       sendMessage({ type: 'start_session', clientId: client.id, productId: product.id, sellerId });
@@ -109,30 +108,29 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   }, [sendMessage, stopCapture, disconnect]);
 
   return (
-    <div className="flex flex-col h-full gap-4 min-h-0">
+    <div className="flex flex-col h-full gap-4 min-h-0 animate-fade-up">
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-xl font-semibold text-white">{client.name}</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-xl font-semibold text-slate-800 tracking-tight">{client.name}</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
             {client.company} · {client.industry}
           </p>
         </div>
-        <div className="text-xs text-slate-500 bg-slate-800/60 px-3 py-1.5 rounded-lg">
+        <div className="text-xs text-slate-500 font-medium bg-white border border-slate-100 shadow-card px-3 py-1.5 rounded-lg">
           {product.name}
         </div>
       </div>
 
       {/* WebSocket not configured warning */}
       {!wsConfigured && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex-shrink-0">
-          <WifiOff size={14} className="flex-shrink-0" />
+        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm flex-shrink-0">
+          <WifiOff size={14} className="flex-shrink-0 text-rose-400" />
           <span>
-            <strong>Servidor de coaching no configurado.</strong>{' '}
-            <code className="text-xs bg-red-500/10 px-1 rounded">NEXT_PUBLIC_API_WS_URL</code> no está
+            <strong className="font-semibold">Servidor de coaching no configurado.</strong>{' '}
+            <code className="text-xs bg-rose-100 px-1.5 py-0.5 rounded font-mono">NEXT_PUBLIC_API_WS_URL</code> no está
             definida. Las llamadas se intentarán en{' '}
-            <code className="text-xs bg-red-500/10 px-1 rounded">ws://localhost:3001/ws</code>, que puede
-            no estar disponible en este entorno.
+            <code className="text-xs bg-rose-100 px-1.5 py-0.5 rounded font-mono">ws://localhost:3001/ws</code>.
           </span>
         </div>
       )}
@@ -140,41 +138,41 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
       {/* Main grid */}
       <div className="grid grid-cols-[220px_1fr_280px] gap-4 flex-1 min-h-0">
         {/* Client context panel */}
-        <div className="bg-[#0d1b2e] rounded-xl p-4 overflow-y-auto border border-slate-800/60 space-y-4">
-          <h2 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <div className="bg-white rounded-2xl p-4 overflow-y-auto border border-slate-100 shadow-card space-y-4">
+          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
             Contexto del cliente
           </h2>
 
           {client.pain_points && (
             <section>
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <AlertCircle size={11} className="text-amber-400" />
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+              <div className="flex items-center gap-1.5 mb-2">
+                <AlertCircle size={11} className="text-amber-500" />
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-500">
                   Pain Points
                 </p>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed">{client.pain_points}</p>
+              <p className="text-xs text-slate-600 leading-relaxed">{client.pain_points}</p>
             </section>
           )}
 
           {client.notes && (
             <section>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
                 Notas
               </p>
-              <p className="text-xs text-slate-400 leading-relaxed">{client.notes}</p>
+              <p className="text-xs text-slate-500 leading-relaxed">{client.notes}</p>
             </section>
           )}
 
-          <div className="border-t border-slate-800 pt-3 space-y-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          <div className="border-t border-slate-100 pt-3 space-y-3">
+            <h2 className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
               Producto
             </h2>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div className="flex items-center gap-1.5">
-                <Building2 size={11} className="text-sky-400" />
-                <p className="text-xs text-slate-300 font-medium">{product.name}</p>
+                <Building2 size={11} className="text-indigo-400" />
+                <p className="text-xs text-slate-700 font-semibold">{product.name}</p>
               </div>
 
               <div className="flex items-center justify-between">
@@ -182,7 +180,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
                   <DollarSign size={10} />
                   Precio sugerido
                 </div>
-                <span className="text-xs font-semibold text-emerald-400">
+                <span className="text-xs font-semibold text-emerald-600">
                   ${product.suggested_price.toLocaleString()}
                 </span>
               </div>
@@ -192,7 +190,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
                   <DollarSign size={10} />
                   Mínimo
                 </div>
-                <span className="text-xs font-semibold text-red-400">
+                <span className="text-xs font-semibold text-rose-500">
                   ${product.min_price.toLocaleString()}
                 </span>
               </div>
@@ -200,14 +198,14 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
 
             {product.features.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1">
                   <Tag size={9} />
                   Características
                 </p>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {product.features.map((f) => (
-                    <li key={f} className="text-xs text-slate-400 flex items-start gap-1.5">
-                      <span className="text-sky-500 mt-0.5">·</span>
+                    <li key={f} className="text-xs text-slate-500 flex items-start gap-1.5">
+                      <span className="text-indigo-400 mt-0.5 font-bold">·</span>
                       {f}
                     </li>
                   ))}

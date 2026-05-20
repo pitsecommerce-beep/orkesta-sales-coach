@@ -13,28 +13,30 @@ export default async function ClientsPage() {
   const clients = await getClients();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-up">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Clientes</h1>
-          <p className="text-slate-400 text-sm mt-1">{clients.length} clientes registrados</p>
+          <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Clientes</h1>
+          <p className="text-slate-500 text-sm mt-1">{clients.length} clientes registrados</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-sm font-medium rounded-lg transition-colors">
+        <button className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-xl shadow-sm shadow-indigo-500/20 transition-all duration-200 hover:shadow-md hover:shadow-indigo-500/25">
           <Plus size={15} />
           Nuevo cliente
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3">
+      <div className="grid grid-cols-1 gap-2.5">
         {clients.map((client) => (
           <ClientRow key={client.id} client={client} />
         ))}
 
         {clients.length === 0 && (
-          <div className="text-center py-16 text-slate-600">
-            <Building2 size={32} className="mx-auto mb-3 opacity-50" />
-            <p>No hay clientes registrados.</p>
-            <p className="text-sm mt-1">Ejecuta la migración de Supabase para ver los datos de ejemplo.</p>
+          <div className="text-center py-20 text-slate-400">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <Building2 size={28} className="text-slate-300" />
+            </div>
+            <p className="font-medium text-slate-500">No hay clientes registrados</p>
+            <p className="text-sm mt-1 text-slate-400">Ejecuta la migración de Supabase para ver los datos de ejemplo.</p>
           </div>
         )}
       </div>
@@ -44,14 +46,14 @@ export default async function ClientsPage() {
 
 function ClientRow({ client }: { client: Client }) {
   return (
-    <div className="flex items-center justify-between p-4 bg-[#0d1b2e] rounded-xl border border-slate-800/60 hover:border-slate-700/60 transition-colors">
+    <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-card hover:shadow-card-hover hover:-translate-y-px transition-all duration-200">
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500/20 to-violet-500/20 border border-sky-500/20 flex items-center justify-center text-sky-300 font-semibold text-sm">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-violet-400 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
           {client.name.charAt(0)}
         </div>
         <div>
-          <p className="text-sm font-medium text-white">{client.name}</p>
-          <p className="text-xs text-slate-400">
+          <p className="text-sm font-semibold text-slate-800">{client.name}</p>
+          <p className="text-xs text-slate-400 mt-0.5">
             {client.company} · {client.industry}
           </p>
         </div>
@@ -59,11 +61,11 @@ function ClientRow({ client }: { client: Client }) {
 
       <div className="flex items-center gap-3">
         {client.phone && (
-          <span className="text-xs text-slate-500">{client.phone}</span>
+          <span className="text-xs text-slate-400">{client.phone}</span>
         )}
         <Link
           href={`/call/${client.id}`}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg text-xs font-medium hover:bg-emerald-100 hover:border-emerald-200 transition-all duration-150"
         >
           <Phone size={12} />
           Llamar
