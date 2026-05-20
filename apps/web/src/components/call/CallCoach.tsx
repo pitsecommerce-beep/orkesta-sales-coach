@@ -61,11 +61,14 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
     setCurrentSuggestion('');
   }, []);
 
-  const handleSessionStarted = useCallback((_callId: string) => {
-    startTimer();
-  }, []);
+  const handleSessionStarted = useCallback((_callId: string) => {}, []);
 
   const handleSessionEnded = useCallback(() => {
+    setIsCallActive(false);
+    stopTimer();
+  }, []);
+
+  const handleConnectError = useCallback(() => {
     setIsCallActive(false);
     stopTimer();
   }, []);
@@ -77,6 +80,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
     onSessionStarted: handleSessionStarted,
     onSessionEnded: handleSessionEnded,
     onError: (msg) => console.error('[Coach]', msg),
+    onConnectError: handleConnectError,
   });
 
   const { isRecording, error: audioError, startCapture, stopCapture } = useAudioCapture({
@@ -85,14 +89,15 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
 
   const handleStartCall = useCallback(
     async (withSystemAudio: boolean) => {
+      setTranscript([]);
+      setSuggestions([]);
+      setCurrentSuggestion('');
+      setIsCallActive(true);
+      startTimer();
       connect();
       await new Promise((r) => setTimeout(r, 300));
       await startCapture(withSystemAudio);
       sendMessage({ type: 'start_session', clientId: client.id, productId: product.id, sellerId });
-      setIsCallActive(true);
-      setTranscript([]);
-      setSuggestions([]);
-      setCurrentSuggestion('');
     },
     [client.id, product.id, sellerId, connect, startCapture, sendMessage],
   );

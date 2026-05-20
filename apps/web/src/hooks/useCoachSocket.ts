@@ -10,6 +10,7 @@ interface UseCoachSocketOptions {
   onSessionStarted: (callId: string) => void;
   onSessionEnded: () => void;
   onError: (message: string) => void;
+  onConnectError?: () => void;
 }
 
 export function useCoachSocket({
@@ -19,16 +20,27 @@ export function useCoachSocket({
   onSessionStarted,
   onSessionEnded,
   onError,
+  onConnectError,
 }: UseCoachSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const didOpenRef = useRef(false);
 
   const connect = useCallback(() => {
     const url = process.env.NEXT_PUBLIC_API_WS_URL ?? 'ws://localhost:3001/ws';
     const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
+    didOpenRef.current = false;
 
-    ws.onopen = () => setIsConnected(true);
+    ws.onopen = () => {
+      didOpenRef.current = true;
+      setIsConnected(true);
+    };
+    ws.onerror = () => {
+      if (!didOpenRef.current) {
+        onConnectError?.();
+      }
+    };
     ws.onclose = () => {
       setIsConnected(false);
       wsRef.current = null;
@@ -65,7 +77,7 @@ export function useCoachSocket({
     };
 
     wsRef.current = ws;
-  }, [onTranscript, onSuggestionChunk, onSuggestionComplete, onSessionStarted, onSessionEnded, onError]);
+  }, [onTranscript, onSuggestionChunk, onSuggestionComplete, onSessionStarted, onSessionEnded, onError, onConnectError]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();
