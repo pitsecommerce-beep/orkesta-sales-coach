@@ -64,13 +64,18 @@ export function useAudioCapture({ onChunk, timeslice = 250 }: UseAudioCaptureOpt
           audioBitsPerSecond: 32000,
         });
 
+        // Gate prevents chunks from being sent before the server processes start_session
+        let gateOpen = false;
+
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
+          if (e.data.size > 0 && gateOpen) {
             e.data.arrayBuffer().then(onChunk);
           }
         };
 
         recorder.start(timeslice);
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        gateOpen = true;
         recorderRef.current = recorder;
         setIsRecording(true);
       } catch (err) {

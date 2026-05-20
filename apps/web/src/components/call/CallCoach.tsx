@@ -99,8 +99,8 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
       startTimer();
       try {
         await connect();
-        await startCapture(withSystemAudio);
         sendMessage({ type: 'start_session', clientId: client.id, productId: product.id, sellerId });
+        await startCapture(withSystemAudio);
       } catch (err) {
         setIsCallActive(false);
         stopTimer();
