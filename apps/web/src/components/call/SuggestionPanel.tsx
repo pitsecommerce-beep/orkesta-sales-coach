@@ -19,9 +19,7 @@ export function SuggestionPanel({ suggestions, currentSuggestion }: SuggestionPa
         <div className="w-5 h-5 rounded-md bg-violet-100 flex items-center justify-center">
           <Sparkles size={11} className="text-violet-500" />
         </div>
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-          AI Coach
-        </h2>
+        <h2 className="text-xs font-semibold text-slate-400">AI Coach</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 min-h-0">
@@ -30,7 +28,7 @@ export function SuggestionPanel({ suggestions, currentSuggestion }: SuggestionPa
           <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4 animate-slide-in">
             <div className="flex items-center gap-2 mb-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-              <span className="text-[10px] font-semibold text-violet-500 uppercase tracking-widest">
+              <span className="text-[10px] font-bold text-violet-500 uppercase tracking-wide">
                 Generando respuesta…
               </span>
             </div>
@@ -45,7 +43,7 @@ export function SuggestionPanel({ suggestions, currentSuggestion }: SuggestionPa
           <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 rounded-2xl p-4 animate-slide-in shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles size={12} className="text-violet-500" />
-              <span className="text-[10px] font-semibold text-violet-500 uppercase tracking-widest">
+              <span className="text-[10px] font-bold text-violet-600 uppercase tracking-wide">
                 Di esto ahora
               </span>
             </div>
@@ -68,7 +66,7 @@ export function SuggestionPanel({ suggestions, currentSuggestion }: SuggestionPa
         {/* History */}
         {history.length > 0 && (
           <div className="space-y-2">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1">
               <Clock size={10} />
               Anteriores
             </p>

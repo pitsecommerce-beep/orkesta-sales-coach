@@ -1,15 +1,15 @@
 import { PhoneCall, Users, TrendingUp, Clock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 async function getStats() {
-  if (!supabase) {
+  if (!supabaseServer) {
     return { recentCalls: [], totalClients: 0, activeCalls: 0 };
   }
 
   const [callsRes, clientsRes] = await Promise.all([
-    supabase.from('calls').select('id, status, started_at, ended_at').order('created_at', { ascending: false }).limit(5),
-    supabase.from('clients').select('id', { count: 'exact', head: true }),
+    supabaseServer.from('calls').select('id, status, started_at, ended_at').order('created_at', { ascending: false }).limit(5),
+    supabaseServer.from('clients').select('id', { count: 'exact', head: true }),
   ]);
 
   return {
@@ -29,7 +29,7 @@ export default async function DashboardPage() {
       value: stats.totalClients,
       textColor: 'text-indigo-600',
       iconBg: 'bg-indigo-500',
-      tileBg: 'bg-indigo-50/60',
+      tileBg: 'bg-indigo-50/50',
     },
     {
       icon: PhoneCall,
@@ -37,7 +37,7 @@ export default async function DashboardPage() {
       value: stats.activeCalls,
       textColor: 'text-emerald-600',
       iconBg: 'bg-emerald-500',
-      tileBg: 'bg-emerald-50/60',
+      tileBg: 'bg-emerald-50/50',
     },
     {
       icon: TrendingUp,
@@ -45,15 +45,15 @@ export default async function DashboardPage() {
       value: stats.recentCalls.length,
       textColor: 'text-violet-600',
       iconBg: 'bg-violet-500',
-      tileBg: 'bg-violet-50/60',
+      tileBg: 'bg-violet-50/50',
     },
   ];
 
   return (
     <div className="space-y-8 animate-fade-up">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Dashboard</h1>
-        <p className="text-slate-500 text-sm mt-1">Resumen de actividad de ventas</p>
+        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Dashboard</h1>
+        <p className="text-slate-400 text-sm mt-1">Resumen de actividad de ventas</p>
       </div>
 
       {/* Stats */}
@@ -112,8 +112,8 @@ export default async function DashboardPage() {
       {/* Recent calls */}
       {stats.recentCalls.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
-            <Clock size={14} className="text-slate-400" />
+          <h2 className="text-sm font-semibold text-slate-500 mb-3 flex items-center gap-2">
+            <Clock size={13} className="text-slate-400" />
             Llamadas recientes
           </h2>
           <div className="space-y-2">
@@ -129,10 +129,10 @@ export default async function DashboardPage() {
                         ? 'bg-emerald-400 animate-pulse'
                         : call.status === 'completed'
                           ? 'bg-slate-300'
-                          : 'bg-red-400'
+                          : 'bg-rose-400'
                     }`}
                   />
-                  <span className="text-sm text-slate-600 font-mono">{call.id.slice(0, 8)}...</span>
+                  <span className="text-sm text-slate-600 font-mono text-xs">{call.id.slice(0, 8)}&hellip;</span>
                 </div>
                 <span className="text-xs text-slate-400">
                   {new Date(call.started_at).toLocaleString('es-MX')}

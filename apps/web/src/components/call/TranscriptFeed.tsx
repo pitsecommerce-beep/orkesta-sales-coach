@@ -21,9 +21,7 @@ export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive }: Tra
   return (
     <div className="bg-white rounded-2xl flex flex-col overflow-hidden border border-slate-100 shadow-card">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-          Transcripción en vivo
-        </h2>
+        <h2 className="text-xs font-semibold text-slate-400">Transcripción en vivo</h2>
         {isActive && (
           <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -84,7 +82,7 @@ function TranscriptBubble({ entry }: { entry: TranscriptEntry }) {
       <div className="max-w-[80%]">
         <p
           className={cn(
-            'text-[10px] font-semibold mb-1.5 tracking-widest uppercase',
+            'text-[10px] font-bold mb-1.5 uppercase tracking-wide',
             isSeller ? 'text-right text-indigo-400' : 'text-left text-amber-500',
           )}
         >
