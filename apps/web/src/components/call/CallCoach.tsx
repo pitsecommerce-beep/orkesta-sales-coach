@@ -27,19 +27,19 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startTimer = () => {
-    setDuration(0);
-    timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-  };
-
-  const stopTimer = () => {
+  const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  };
+  }, []);
 
-  useEffect(() => () => stopTimer(), []);
+  const startTimer = useCallback(() => {
+    setDuration(0);
+    timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+  }, []);
+
+  useEffect(() => () => stopTimer(), [stopTimer]);
 
   const handleTranscript = useCallback((msg: Extract<ServerMessage, { type: 'transcript' }>) => {
     setLiveText(msg.isFinal ? '' : msg.text);
@@ -66,12 +66,12 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const handleSessionEnded = useCallback(() => {
     setIsCallActive(false);
     stopTimer();
-  }, []);
+  }, [stopTimer]);
 
   const handleConnectError = useCallback(() => {
     setIsCallActive(false);
     stopTimer();
-  }, []);
+  }, [stopTimer]);
 
   const { sendAudio, sendMessage, connect, disconnect } = useCoachSocket({
     onTranscript: handleTranscript,
@@ -94,12 +94,16 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
       setCurrentSuggestion('');
       setIsCallActive(true);
       startTimer();
-      connect();
-      await new Promise((r) => setTimeout(r, 300));
-      await startCapture(withSystemAudio);
-      sendMessage({ type: 'start_session', clientId: client.id, productId: product.id, sellerId });
+      try {
+        await connect();
+        await startCapture(withSystemAudio);
+        sendMessage({ type: 'start_session', clientId: client.id, productId: product.id, sellerId });
+      } catch {
+        setIsCallActive(false);
+        stopTimer();
+      }
     },
-    [client.id, product.id, sellerId, connect, startCapture, sendMessage],
+    [client.id, product.id, sellerId, connect, startCapture, sendMessage, startTimer, stopTimer],
   );
 
   const handleEndCall = useCallback(async () => {
@@ -109,7 +113,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
     setTimeout(disconnect, 1500);
     setIsCallActive(false);
     setLiveText('');
-  }, [sendMessage, stopCapture, disconnect]);
+  }, [sendMessage, stopCapture, disconnect, stopTimer]);
 
   return (
     <div className="flex flex-col h-full gap-4 min-h-0 animate-fade-up">

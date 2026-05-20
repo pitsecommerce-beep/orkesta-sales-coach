@@ -26,57 +26,61 @@ export function useCoachSocket({
   const [isConnected, setIsConnected] = useState(false);
   const didOpenRef = useRef(false);
 
-  const connect = useCallback(() => {
-    const url = process.env.NEXT_PUBLIC_API_WS_URL ?? 'ws://localhost:3001/ws';
-    const ws = new WebSocket(url);
-    ws.binaryType = 'arraybuffer';
-    didOpenRef.current = false;
+  const connect = useCallback((): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const url = process.env.NEXT_PUBLIC_API_WS_URL ?? 'ws://localhost:3001/ws';
+      const ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer';
+      didOpenRef.current = false;
 
-    ws.onopen = () => {
-      didOpenRef.current = true;
-      setIsConnected(true);
-    };
-    ws.onerror = () => {
-      if (!didOpenRef.current) {
-        onConnectError?.();
-      }
-    };
-    ws.onclose = () => {
-      setIsConnected(false);
-      wsRef.current = null;
-    };
+      ws.onopen = () => {
+        didOpenRef.current = true;
+        setIsConnected(true);
+        resolve();
+      };
+      ws.onerror = () => {
+        if (!didOpenRef.current) {
+          onConnectError?.();
+          reject(new Error('WebSocket connection failed'));
+        }
+      };
+      ws.onclose = () => {
+        setIsConnected(false);
+        wsRef.current = null;
+      };
 
-    ws.onmessage = (event: MessageEvent<string>) => {
-      let msg: ServerMessage;
-      try {
-        msg = JSON.parse(event.data) as ServerMessage;
-      } catch {
-        return;
-      }
+      ws.onmessage = (event: MessageEvent<string>) => {
+        let msg: ServerMessage;
+        try {
+          msg = JSON.parse(event.data) as ServerMessage;
+        } catch {
+          return;
+        }
 
-      switch (msg.type) {
-        case 'transcript':
-          onTranscript(msg);
-          break;
-        case 'suggestion_chunk':
-          onSuggestionChunk(msg.text);
-          break;
-        case 'suggestion_complete':
-          onSuggestionComplete(msg.text);
-          break;
-        case 'session_started':
-          onSessionStarted(msg.callId);
-          break;
-        case 'session_ended':
-          onSessionEnded();
-          break;
-        case 'error':
-          onError(msg.message);
-          break;
-      }
-    };
+        switch (msg.type) {
+          case 'transcript':
+            onTranscript(msg);
+            break;
+          case 'suggestion_chunk':
+            onSuggestionChunk(msg.text);
+            break;
+          case 'suggestion_complete':
+            onSuggestionComplete(msg.text);
+            break;
+          case 'session_started':
+            onSessionStarted(msg.callId);
+            break;
+          case 'session_ended':
+            onSessionEnded();
+            break;
+          case 'error':
+            onError(msg.message);
+            break;
+        }
+      };
 
-    wsRef.current = ws;
+      wsRef.current = ws;
+    });
   }, [onTranscript, onSuggestionChunk, onSuggestionComplete, onSessionStarted, onSessionEnded, onError, onConnectError]);
 
   const disconnect = useCallback(() => {

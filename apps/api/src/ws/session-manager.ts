@@ -18,7 +18,9 @@ export class CallSession {
   async handleMessage(raw: Buffer | string) {
     // Binary = audio chunk → forward to Deepgram
     if (Buffer.isBuffer(raw)) {
-      // Convert Node Buffer to ArrayBuffer for Deepgram SDK compatibility
+      if (!this.deepgramConn) {
+        console.warn('[Session] Audio received but no Deepgram session active — start_session may not have been received');
+      }
       const ab = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
       this.deepgramConn?.send(ab);
       return;
@@ -28,8 +30,11 @@ export class CallSession {
     try {
       msg = JSON.parse(raw.toString()) as ClientMessage;
     } catch {
+      console.warn('[Session] Received unparseable message:', raw.toString().slice(0, 100));
       return;
     }
+
+    console.log('[Session] Message received:', msg.type);
 
     switch (msg.type) {
       case 'start_session':
@@ -80,6 +85,7 @@ export class CallSession {
       this.callId = call.id as string;
 
       this.startDeepgram();
+      console.log('[Session] Started successfully, callId:', this.callId);
       this.send({ type: 'session_started', callId: this.callId });
     } catch (err) {
       console.error('[Session] Failed to start:', err);

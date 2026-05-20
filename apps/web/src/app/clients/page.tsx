@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { Phone, Building2 } from 'lucide-react';
+import { Phone, Building2, Package } from 'lucide-react';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { NewClientButton } from '@/components/clients/NewClientDialog';
 import { ClientsToolbar } from '@/components/clients/ClientsToolbar';
-import type { Client } from '@/lib/types';
+import { EditClientButton } from '@/components/clients/EditClientDialog';
+import type { Client, Product } from '@/lib/types';
 
 async function getClients(): Promise<Client[]> {
   if (!supabaseServer) return [];
@@ -11,8 +12,16 @@ async function getClients(): Promise<Client[]> {
   return data ?? [];
 }
 
+async function getProducts(): Promise<Product[]> {
+  if (!supabaseServer) return [];
+  const { data } = await supabaseServer.from('products').select('*').order('name');
+  return data ?? [];
+}
+
 export default async function ClientsPage() {
-  const clients = await getClients();
+  const [clients, products] = await Promise.all([getClients(), getProducts()]);
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -33,7 +42,12 @@ export default async function ClientsPage() {
 
       <div className="grid grid-cols-1 gap-2.5">
         {clients.map((client) => (
-          <ClientRow key={client.id} client={client} />
+          <ClientRow
+            key={client.id}
+            client={client}
+            products={products}
+            assignedProduct={client.default_product_id ? productMap.get(client.default_product_id) : undefined}
+          />
         ))}
 
         {clients.length === 0 && (
@@ -52,7 +66,19 @@ export default async function ClientsPage() {
   );
 }
 
-function ClientRow({ client }: { client: Client }) {
+function ClientRow({
+  client,
+  products,
+  assignedProduct,
+}: {
+  client: Client;
+  products: Product[];
+  assignedProduct?: Product;
+}) {
+  const callHref = assignedProduct
+    ? `/call/${client.id}?productId=${assignedProduct.id}`
+    : `/call/${client.id}`;
+
   return (
     <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-card hover:shadow-card-hover hover:-translate-y-px transition-all duration-200">
       <div className="flex items-center gap-4">
@@ -64,15 +90,22 @@ function ClientRow({ client }: { client: Client }) {
           <p className="text-xs text-slate-400 mt-0.5">
             {[client.company, client.industry].filter(Boolean).join(' · ')}
           </p>
+          {assignedProduct && (
+            <div className="flex items-center gap-1 mt-1">
+              <Package size={10} className="text-indigo-400" />
+              <span className="text-xs text-indigo-600 font-medium">{assignedProduct.name}</span>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex items-center gap-3">
         {client.phone && (
-          <span className="text-xs text-slate-400 font-mono">{client.phone}</span>
+          <span className="text-xs text-slate-400 font-mono hidden sm:block">{client.phone}</span>
         )}
+        <EditClientButton client={client} products={products} />
         <Link
-          href={`/call/${client.id}`}
+          href={callHref}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-xs font-semibold hover:bg-emerald-100 hover:border-emerald-200 transition-all duration-150"
         >
           <Phone size={12} />

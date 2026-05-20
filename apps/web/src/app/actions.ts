@@ -22,6 +22,28 @@ export async function createClientAction(formData: FormData) {
   revalidatePath('/clients');
 }
 
+export async function updateClientAction(id: string, formData: FormData) {
+  if (!supabaseServer) throw new Error('Base de datos no configurada.');
+
+  const defaultProductId = (formData.get('default_product_id') as string | null)?.trim() || null;
+
+  const data: Record<string, unknown> = {
+    name: (formData.get('name') as string).trim(),
+    company: (formData.get('company') as string | null)?.trim() || null,
+    industry: (formData.get('industry') as string | null)?.trim() || null,
+    email: (formData.get('email') as string | null)?.trim() || null,
+    phone: (formData.get('phone') as string | null)?.trim() || null,
+    pain_points: (formData.get('pain_points') as string | null)?.trim() || null,
+    notes: (formData.get('notes') as string | null)?.trim() || null,
+    default_product_id: defaultProductId || null,
+  };
+
+  const { error } = await supabaseServer.from('clients').update(data).eq('id', id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/clients');
+}
+
 export async function importClientsAction(rows: Record<string, string>[]) {
   if (!supabaseServer) throw new Error('Base de datos no configurada.');
 

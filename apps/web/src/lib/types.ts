@@ -8,6 +8,7 @@ export interface Client {
   pain_points: string;
   notes: string;
   current_plan?: Record<string, unknown>;
+  default_product_id?: string | null;
   created_at: string;
   updated_at: string;
 }
