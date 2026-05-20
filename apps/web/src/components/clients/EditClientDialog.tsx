@@ -37,11 +37,11 @@ export function EditClientDialog({ client, products, onClose }: EditClientDialog
     const formData = new FormData(e.currentTarget);
     setError('');
     startTransition(async () => {
-      try {
-        await updateClientAction(client.id, formData);
+      const result = await updateClientAction(client.id, formData);
+      if (result.error) {
+        setError(result.error);
+      } else {
         onClose();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al guardar los cambios.');
       }
     });
   };

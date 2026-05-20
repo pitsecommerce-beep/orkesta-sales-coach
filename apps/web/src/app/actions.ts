@@ -3,8 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { supabaseServer } from '@/lib/supabaseServer';
 
-export async function createClientAction(formData: FormData) {
-  if (!supabaseServer) throw new Error('Base de datos no configurada.');
+export async function createClientAction(formData: FormData): Promise<{ error?: string }> {
+  if (!supabaseServer) return { error: 'Base de datos no configurada.' };
 
   const data = {
     name: (formData.get('name') as string).trim(),
@@ -17,13 +17,14 @@ export async function createClientAction(formData: FormData) {
   };
 
   const { error } = await supabaseServer.from('clients').insert(data);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath('/clients');
+  return {};
 }
 
-export async function updateClientAction(id: string, formData: FormData) {
-  if (!supabaseServer) throw new Error('Base de datos no configurada.');
+export async function updateClientAction(id: string, formData: FormData): Promise<{ error?: string }> {
+  if (!supabaseServer) return { error: 'Base de datos no configurada.' };
 
   const defaultProductId = (formData.get('default_product_id') as string | null)?.trim() || null;
 
@@ -39,9 +40,10 @@ export async function updateClientAction(id: string, formData: FormData) {
   };
 
   const { error } = await supabaseServer.from('clients').update(data).eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath('/clients');
+  return {};
 }
 
 export async function importClientsAction(rows: Record<string, string>[]) {
