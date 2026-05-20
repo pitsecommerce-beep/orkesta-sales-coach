@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabaseServer } from '@/lib/supabaseServer';
 import { CallCoach } from '@/components/call/CallCoach';
 import type { Client, Product } from '@/lib/types';
 
@@ -9,15 +9,18 @@ interface Props {
   searchParams: { productId?: string };
 }
 
-async function getData(clientId: string, productId?: string): Promise<{ client: Client; product: Product; sellerId: string } | null> {
-  if (!supabase) return null;
+async function getData(
+  clientId: string,
+  productId?: string,
+): Promise<{ client: Client; product: Product; sellerId: string } | null> {
+  if (!supabaseServer) return null;
 
   const [clientRes, productRes, sellerRes] = await Promise.all([
-    supabase.from('clients').select('*').eq('id', clientId).single(),
+    supabaseServer.from('clients').select('*').eq('id', clientId).single(),
     productId
-      ? supabase.from('products').select('*').eq('id', productId).single()
-      : supabase.from('products').select('*').limit(1).single(),
-    supabase.from('sellers').select('id').limit(1).single(),
+      ? supabaseServer.from('products').select('*').eq('id', productId).single()
+      : supabaseServer.from('products').select('*').limit(1).single(),
+    supabaseServer.from('sellers').select('id').limit(1).single(),
   ]);
 
   if (clientRes.error || !clientRes.data) return null;
@@ -32,17 +35,17 @@ async function getData(clientId: string, productId?: string): Promise<{ client: 
 }
 
 export default async function CallPage({ params, searchParams }: Props) {
-  if (!supabase) {
+  if (!supabaseServer) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-3rem)]">
-        <div className="text-center space-y-3 max-w-sm">
+        <div className="text-center space-y-3 max-w-sm bg-white rounded-2xl p-8 shadow-card border border-slate-100">
           <AlertTriangle size={32} className="text-amber-400 mx-auto" />
-          <p className="text-white font-semibold">Base de datos no configurada</p>
-          <p className="text-slate-400 text-sm leading-relaxed">
+          <p className="text-slate-800 font-semibold">Base de datos no configurada</p>
+          <p className="text-slate-500 text-sm leading-relaxed">
             Define{' '}
-            <code className="text-xs bg-slate-800 px-1 rounded">NEXT_PUBLIC_SUPABASE_URL</code> y{' '}
-            <code className="text-xs bg-slate-800 px-1 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{' '}
-            para cargar el contexto del cliente e iniciar la llamada.
+            <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-mono">NEXT_PUBLIC_SUPABASE_URL</code> y{' '}
+            <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{' '}
+            para cargar el contexto del cliente.
           </p>
         </div>
       </div>
@@ -57,11 +60,7 @@ export default async function CallPage({ params, searchParams }: Props) {
 
   return (
     <div className="h-[calc(100vh-3rem)] flex flex-col">
-      <CallCoach
-        client={data.client}
-        product={data.product}
-        sellerId={data.sellerId}
-      />
+      <CallCoach client={data.client} product={data.product} sellerId={data.sellerId} />
     </div>
   );
 }

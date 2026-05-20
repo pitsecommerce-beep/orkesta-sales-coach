@@ -44,7 +44,6 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const handleTranscript = useCallback((msg: Extract<ServerMessage, { type: 'transcript' }>) => {
     setLiveText(msg.isFinal ? '' : msg.text);
     setLiveSpeaker(msg.speaker);
-
     if (msg.isFinal && msg.text.trim()) {
       setTranscript((prev) => [
         ...prev,
@@ -112,9 +111,9 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800 tracking-tight">{client.name}</h1>
+          <h1 className="text-xl font-bold text-slate-800 tracking-tight">{client.name}</h1>
           <p className="text-sm text-slate-400 mt-0.5">
-            {client.company} · {client.industry}
+            {[client.company, client.industry].filter(Boolean).join(' · ')}
           </p>
         </div>
         <div className="text-xs text-slate-500 font-medium bg-white border border-slate-100 shadow-card px-3 py-1.5 rounded-lg">
@@ -128,9 +127,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
           <WifiOff size={14} className="flex-shrink-0 text-rose-400" />
           <span>
             <strong className="font-semibold">Servidor de coaching no configurado.</strong>{' '}
-            <code className="text-xs bg-rose-100 px-1.5 py-0.5 rounded font-mono">NEXT_PUBLIC_API_WS_URL</code> no está
-            definida. Las llamadas se intentarán en{' '}
-            <code className="text-xs bg-rose-100 px-1.5 py-0.5 rounded font-mono">ws://localhost:3001/ws</code>.
+            <code className="text-xs bg-rose-100 px-1.5 py-0.5 rounded font-mono">NEXT_PUBLIC_API_WS_URL</code> no está definida.
           </span>
         </div>
       )}
@@ -139,17 +136,13 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
       <div className="grid grid-cols-[220px_1fr_280px] gap-4 flex-1 min-h-0">
         {/* Client context panel */}
         <div className="bg-white rounded-2xl p-4 overflow-y-auto border border-slate-100 shadow-card space-y-4">
-          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-            Contexto del cliente
-          </h2>
+          <h2 className="text-xs font-semibold text-slate-400">Contexto del cliente</h2>
 
           {client.pain_points && (
             <section>
               <div className="flex items-center gap-1.5 mb-2">
-                <AlertCircle size={11} className="text-amber-500" />
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-500">
-                  Pain Points
-                </p>
+                <AlertCircle size={12} className="text-amber-500" />
+                <p className="text-xs font-semibold text-amber-600">Pain Points</p>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">{client.pain_points}</p>
             </section>
@@ -157,21 +150,17 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
 
           {client.notes && (
             <section>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
-                Notas
-              </p>
+              <p className="text-xs font-semibold text-slate-400 mb-1.5">Notas</p>
               <p className="text-xs text-slate-500 leading-relaxed">{client.notes}</p>
             </section>
           )}
 
           <div className="border-t border-slate-100 pt-3 space-y-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-              Producto
-            </h2>
+            <h2 className="text-xs font-semibold text-slate-400">Producto</h2>
 
             <div className="space-y-2.5">
               <div className="flex items-center gap-1.5">
-                <Building2 size={11} className="text-indigo-400" />
+                <Building2 size={12} className="text-indigo-400" />
                 <p className="text-xs text-slate-700 font-semibold">{product.name}</p>
               </div>
 
@@ -198,14 +187,14 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
 
             {product.features.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1">
-                  <Tag size={9} />
+                <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1">
+                  <Tag size={10} />
                   Características
                 </p>
                 <ul className="space-y-1.5">
                   {product.features.map((f) => (
                     <li key={f} className="text-xs text-slate-500 flex items-start gap-1.5">
-                      <span className="text-indigo-400 mt-0.5 font-bold">·</span>
+                      <span className="text-indigo-400 mt-0.5">·</span>
                       {f}
                     </li>
                   ))}
