@@ -19,6 +19,12 @@ export function createDeepgramStream(
     utterance_end_ms: 1000,
   });
 
+  // Track the last is_final transcript so UtteranceEnd can finalize it
+  // if speech_final never fires for that utterance.
+  let pendingTranscript = '';
+  let pendingWords: DeepgramWord[] = [];
+  let speechFinalSent = false;
+
   connection.on(LiveTranscriptionEvents.Open, () => {
     console.log('[Deepgram] Connection open');
   });
@@ -27,7 +33,29 @@ export function createDeepgramStream(
     const alt = data.channel?.alternatives?.[0];
     if (!alt?.transcript) return;
 
-    onTranscript(alt.transcript, alt.words ?? [], data.speech_final ?? false);
+    const isFinal = (data.speech_final ?? false) as boolean;
+
+    if ((data.is_final ?? false) as boolean) {
+      pendingTranscript = alt.transcript;
+      pendingWords = (alt.words ?? []) as DeepgramWord[];
+    }
+
+    if (isFinal) {
+      speechFinalSent = true;
+    }
+
+    onTranscript(alt.transcript, (alt.words ?? []) as DeepgramWord[], isFinal);
+  });
+
+  // Deepgram fires UtteranceEnd after utterance_end_ms of silence.
+  // If speech_final never fired for the last utterance, emit it now.
+  connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
+    if (!speechFinalSent && pendingTranscript) {
+      onTranscript(pendingTranscript, pendingWords, true);
+    }
+    pendingTranscript = '';
+    pendingWords = [];
+    speechFinalSent = false;
   });
 
   connection.on(LiveTranscriptionEvents.Error, (err) => {

@@ -32,11 +32,11 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
     const formData = new FormData(e.currentTarget);
     setError('');
     startTransition(async () => {
-      try {
-        await createClientAction(formData);
+      const result = await createClientAction(formData);
+      if (result.error) {
+        setError(result.error);
+      } else {
         onClose();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al crear el cliente.');
       }
     });
   };
