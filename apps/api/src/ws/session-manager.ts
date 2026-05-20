@@ -15,13 +15,14 @@ export class CallSession {
 
   constructor(private readonly ws: WebSocket) {}
 
-  async handleMessage(raw: Buffer | string) {
-    // Binary = audio chunk → forward to Deepgram
-    if (Buffer.isBuffer(raw)) {
+  async handleMessage(raw: Buffer | string, isBinary = false) {
+    // isBinary reliably identifies binary WebSocket frames regardless of Buffer wrapping
+    if (isBinary) {
       if (!this.deepgramConn) {
         console.warn('[Session] Audio received but no Deepgram session active — start_session may not have been received');
       }
-      const ab = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
+      const buf = raw instanceof Buffer ? raw : Buffer.from(raw as string, 'binary');
+      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
       this.deepgramConn?.send(ab);
       return;
     }

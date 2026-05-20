@@ -7,9 +7,9 @@ export async function wsHandler(socket: WebSocket, _req: FastifyRequest) {
 
   console.log('[WS] Client connected');
 
-  socket.on('message', async (data: Buffer | string) => {
+  socket.on('message', async (data: Buffer | string, isBinary: boolean) => {
     try {
-      await session.handleMessage(data);
+      await session.handleMessage(data, isBinary);
     } catch (err: unknown) {
       console.error('[WS] Message error:', err);
     }
