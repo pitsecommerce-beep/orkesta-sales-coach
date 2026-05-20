@@ -1,6 +1,6 @@
 # Build stage
 FROM node:22-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN pnpm --filter api build
 
 # Runtime stage — install only prod deps
 FROM node:22-alpine AS runner
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 ENV NODE_ENV=production
