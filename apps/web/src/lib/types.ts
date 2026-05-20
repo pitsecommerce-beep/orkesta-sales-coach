@@ -7,7 +7,7 @@ export interface Client {
   phone: string;
   pain_points: string;
   notes: string;
-  current_plan?: Record<string, unknown> | null;
+  current_plan?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -19,7 +19,8 @@ export interface Product {
   min_price: number;
   suggested_price: number;
   features: string[];
-  pricing_model?: string | null;
+  pricing_model?: string;
+  pricing_tiers?: Record<string, unknown>;
   created_at: string;
 }
 
