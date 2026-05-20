@@ -25,6 +25,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const [currentSuggestion, setCurrentSuggestion] = useState('');
   const [isCallActive, setIsCallActive] = useState(false);
   const [duration, setDuration] = useState(0);
+  const [serverError, setServerError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopTimer = useCallback(() => {
@@ -71,6 +72,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const handleConnectError = useCallback(() => {
     setIsCallActive(false);
     stopTimer();
+    setServerError('No se pudo conectar al servidor de coaching. Verifica que NEXT_PUBLIC_API_WS_URL esté configurada correctamente.');
   }, [stopTimer]);
 
   const { sendAudio, sendMessage, connect, disconnect } = useCoachSocket({
@@ -79,7 +81,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
     onSuggestionComplete: handleSuggestionComplete,
     onSessionStarted: handleSessionStarted,
     onSessionEnded: handleSessionEnded,
-    onError: (msg) => console.error('[Coach]', msg),
+    onError: (msg) => { console.error('[Coach]', msg); setServerError(msg); },
     onConnectError: handleConnectError,
   });
 
@@ -92,15 +94,17 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
       setTranscript([]);
       setSuggestions([]);
       setCurrentSuggestion('');
+      setServerError(null);
       setIsCallActive(true);
       startTimer();
       try {
         await connect();
         await startCapture(withSystemAudio);
         sendMessage({ type: 'start_session', clientId: client.id, productId: product.id, sellerId });
-      } catch {
+      } catch (err) {
         setIsCallActive(false);
         stopTimer();
+        setServerError(err instanceof Error ? err.message : 'Error al conectar con el servidor de coaching.');
       }
     },
     [client.id, product.id, sellerId, connect, startCapture, sendMessage, startTimer, stopTimer],
@@ -138,6 +142,17 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
             <strong className="font-semibold">Servidor de coaching no configurado.</strong>{' '}
             <code className="text-xs bg-rose-100 px-1.5 py-0.5 rounded font-mono">NEXT_PUBLIC_API_WS_URL</code> no está definida.
           </span>
+        </div>
+      )}
+
+      {/* Server error banner */}
+      {serverError && (
+        <div className="flex items-start gap-2.5 px-4 py-2.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm flex-shrink-0">
+          <AlertCircle size={14} className="flex-shrink-0 text-rose-400 mt-0.5" />
+          <div>
+            <strong className="font-semibold">Error del servidor: </strong>
+            {serverError}
+          </div>
         </div>
       )}
 
