@@ -3,6 +3,10 @@ import { Phone } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 async function getData() {
+  if (!supabase) {
+    return { clients: [], products: [] };
+  }
+
   const [clientsRes, productsRes] = await Promise.all([
     supabase.from('clients').select('id, name, company').order('name'),
     supabase.from('products').select('id, name, suggested_price').order('name'),

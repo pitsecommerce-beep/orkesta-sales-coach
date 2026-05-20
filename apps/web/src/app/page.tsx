@@ -3,6 +3,10 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 async function getStats() {
+  if (!supabase) {
+    return { recentCalls: [], totalClients: 0, activeCalls: 0 };
+  }
+
   const [callsRes, clientsRes] = await Promise.all([
     supabase.from('calls').select('id, status, started_at, ended_at').order('created_at', { ascending: false }).limit(5),
     supabase.from('clients').select('id', { count: 'exact', head: true }),

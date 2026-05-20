@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { CallCoach } from '@/components/call/CallCoach';
 import type { Client, Product } from '@/lib/types';
@@ -9,6 +10,8 @@ interface Props {
 }
 
 async function getData(clientId: string, productId?: string): Promise<{ client: Client; product: Product; sellerId: string } | null> {
+  if (!supabase) return null;
+
   const [clientRes, productRes, sellerRes] = await Promise.all([
     supabase.from('clients').select('*').eq('id', clientId).single(),
     productId
@@ -29,6 +32,23 @@ async function getData(clientId: string, productId?: string): Promise<{ client: 
 }
 
 export default async function CallPage({ params, searchParams }: Props) {
+  if (!supabase) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-3rem)]">
+        <div className="text-center space-y-3 max-w-sm">
+          <AlertTriangle size={32} className="text-amber-400 mx-auto" />
+          <p className="text-white font-semibold">Base de datos no configurada</p>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Define{' '}
+            <code className="text-xs bg-slate-800 px-1 rounded">NEXT_PUBLIC_SUPABASE_URL</code> y{' '}
+            <code className="text-xs bg-slate-800 px-1 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{' '}
+            para cargar el contexto del cliente e iniciar la llamada.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const data = await getData(params.clientId, searchParams.productId);
 
   if (!data) {
