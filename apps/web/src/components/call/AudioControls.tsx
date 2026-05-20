@@ -46,23 +46,23 @@ export function AudioControls({
   };
 
   return (
-    <div className="bg-[#0a1628] border border-slate-800/60 rounded-xl px-5 py-3 flex items-center justify-between">
+    <div className="bg-white border border-slate-100 shadow-card rounded-2xl px-5 py-3.5 flex items-center justify-between">
       {/* Left: status */}
       <div className="flex items-center gap-3">
         {isRecording ? (
-          <div className="flex items-center gap-2 text-emerald-400">
+          <div className="flex items-center gap-2 text-emerald-600">
             <Mic size={16} className="animate-pulse" />
             <span className="text-sm font-medium">Micrófono activo</span>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-slate-500">
+          <div className="flex items-center gap-2 text-slate-400">
             <MicOff size={16} />
             <span className="text-sm">Micrófono inactivo</span>
           </div>
         )}
 
         {audioError && (
-          <div className="flex items-center gap-1.5 text-red-400 text-xs">
+          <div className="flex items-center gap-1.5 text-rose-500 text-xs">
             <AlertCircle size={12} />
             {audioError}
           </div>
@@ -71,7 +71,7 @@ export function AudioControls({
 
       {/* Center: timer */}
       {isCallActive && (
-        <div className="font-mono text-lg text-white tabular-nums">
+        <div className="font-mono text-lg text-slate-700 font-semibold tabular-nums tracking-tight">
           {mm}:{ss}
         </div>
       )}
@@ -79,12 +79,12 @@ export function AudioControls({
       {/* Right: controls */}
       <div className="flex items-center gap-3">
         {!isCallActive && (
-          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none hover:text-slate-600 transition-colors duration-150">
             <input
               type="checkbox"
               checked={withSystemAudio}
               onChange={(e) => setWithSystemAudio(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-0"
+              className="rounded border-slate-300 bg-white text-indigo-500 focus:ring-indigo-400 focus:ring-offset-0 transition-colors duration-150"
             />
             <Monitor size={12} />
             Capturar audio del sistema
@@ -96,8 +96,8 @@ export function AudioControls({
             onClick={handleEnd}
             disabled={loading}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-              'bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20',
+              'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+              'bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 hover:border-rose-200',
               loading && 'opacity-60 cursor-not-allowed',
             )}
           >
@@ -109,13 +109,13 @@ export function AudioControls({
             onClick={handleStart}
             disabled={loading}
             className={cn(
-              'flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all',
-              'bg-emerald-500 text-white hover:bg-emerald-400 shadow-lg shadow-emerald-500/20',
+              'flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all duration-200',
+              'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-500/25 hover:shadow-md hover:shadow-emerald-500/30',
               loading && 'opacity-60 cursor-not-allowed',
             )}
           >
             <Phone size={15} />
-            {loading ? 'Iniciando...' : 'Iniciar llamada'}
+            {loading ? 'Iniciando…' : 'Iniciar llamada'}
           </button>
         )}
       </div>

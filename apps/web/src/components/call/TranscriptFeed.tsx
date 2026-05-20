@@ -19,13 +19,13 @@ export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive }: Tra
   }, [entries, liveText]);
 
   return (
-    <div className="bg-[#0d1b2e] rounded-xl flex flex-col overflow-hidden border border-slate-800/60">
-      <div className="px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+    <div className="bg-white rounded-2xl flex flex-col overflow-hidden border border-slate-100 shadow-card">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
           Transcripción en vivo
         </h2>
         {isActive && (
-          <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             En vivo
           </span>
@@ -34,13 +34,13 @@ export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive }: Tra
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {entries.length === 0 && !isActive && (
-          <div className="flex items-center justify-center h-full text-slate-600 text-sm">
+          <div className="flex items-center justify-center h-full text-slate-300 text-sm">
             La transcripción aparecerá aquí durante la llamada
           </div>
         )}
 
         {entries.length === 0 && isActive && (
-          <div className="flex items-center justify-center h-full text-slate-500 text-sm">
+          <div className="flex items-center justify-center h-full text-slate-400 text-sm">
             Escuchando...
           </div>
         )}
@@ -59,10 +59,10 @@ export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive }: Tra
           >
             <div
               className={cn(
-                'max-w-[80%] px-3 py-2 rounded-xl text-sm opacity-60',
+                'max-w-[80%] px-3.5 py-2.5 rounded-xl text-sm opacity-60',
                 liveSpeaker === 'client'
-                  ? 'bg-slate-700 text-slate-300'
-                  : 'bg-sky-900/40 text-sky-200',
+                  ? 'bg-slate-100 text-slate-600'
+                  : 'bg-indigo-50 text-indigo-700',
               )}
             >
               <span className="cursor-blink">{liveText}</span>
@@ -84,18 +84,18 @@ function TranscriptBubble({ entry }: { entry: TranscriptEntry }) {
       <div className="max-w-[80%]">
         <p
           className={cn(
-            'text-[10px] font-medium mb-1',
-            isSeller ? 'text-right text-sky-500' : 'text-left text-amber-500',
+            'text-[10px] font-semibold mb-1.5 tracking-widest uppercase',
+            isSeller ? 'text-right text-indigo-400' : 'text-left text-amber-500',
           )}
         >
-          {isSeller ? 'TÚ' : 'CLIENTE'}
+          {isSeller ? 'Tú' : 'Cliente'}
         </p>
         <div
           className={cn(
-            'px-3 py-2 rounded-xl text-sm leading-relaxed',
+            'px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed',
             isSeller
-              ? 'bg-sky-500/10 text-sky-100 border border-sky-500/20'
-              : 'bg-slate-700/60 text-slate-200 border border-slate-600/40',
+              ? 'bg-indigo-50 text-indigo-900 border border-indigo-100'
+              : 'bg-slate-50 text-slate-700 border border-slate-100',
           )}
         >
           {entry.text}

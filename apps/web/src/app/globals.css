@@ -3,38 +3,67 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #080f1e;
-  --bg-secondary: #0f1c2e;
-  --bg-card: #111d30;
+  --bg-page: #F2F5FB;
+  --bg-card: #FFFFFF;
+  --sidebar-bg: #1A2540;
+  --font-inter: 'Inter', sans-serif;
 }
 
 body {
-  background-color: var(--bg-primary);
-  color: #e2e8f0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-page);
+  color: #1E293B;
+  font-family: var(--font-inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* Scrollbar suave */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 2px;
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
 }
 
+/* Transición suave de entrada para elementos */
 @keyframes slide-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-slide-in {
-  animation: slide-in 0.2s ease-out;
+  animation: slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Cursor parpadeante para transcripción en vivo */
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
@@ -42,6 +71,7 @@ body {
 
 .cursor-blink::after {
   content: '|';
-  animation: blink 0.8s step-end infinite;
-  color: #38bdf8;
+  animation: blink 0.9s step-end infinite;
+  color: #6366F1;
+  margin-left: 1px;
 }

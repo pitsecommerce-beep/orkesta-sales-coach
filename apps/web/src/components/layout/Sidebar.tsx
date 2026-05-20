@@ -16,20 +16,20 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 flex-shrink-0 flex flex-col bg-[#0a1628] border-r border-slate-800">
+    <aside className="w-56 flex-shrink-0 flex flex-col bg-navy-800 border-r border-white/[0.06]">
       {/* Logo */}
-      <div className="px-5 py-6 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
+      <div className="px-5 py-6 border-b border-white/[0.06]">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
             <PhoneCall size={14} className="text-white" />
           </div>
-          <span className="font-semibold text-white text-sm">Orkesta</span>
+          <span className="font-semibold text-white text-sm tracking-tight">Orkesta</span>
         </div>
-        <p className="text-xs text-slate-500 mt-1 ml-9">Sales Coach</p>
+        <p className="text-[11px] text-white/25 mt-1.5 ml-[42px] tracking-wide">Sales Coach</p>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
         {nav.map(({ href, icon: Icon, label }) => {
           const active = pathname === href || (href !== '/' && pathname.startsWith(href));
           return (
@@ -37,13 +37,16 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200',
                 active
-                  ? 'bg-sky-500/10 text-sky-400 font-medium'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
+                  ? 'bg-white/10 text-white font-medium'
+                  : 'text-white/45 hover:text-white/75 hover:bg-white/[0.06]',
               )}
             >
-              <Icon size={16} />
+              <Icon
+                size={16}
+                className={cn('transition-colors duration-200', active ? 'text-indigo-300' : '')}
+              />
               {label}
             </Link>
           );
@@ -51,8 +54,8 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-slate-800">
-        <p className="text-xs text-slate-600">v0.1.0 · Claude claude-sonnet-4-6</p>
+      <div className="px-5 py-4 border-t border-white/[0.06]">
+        <p className="text-[11px] text-white/20 tracking-wide">v0.1.0</p>
       </div>
     </aside>
   );
