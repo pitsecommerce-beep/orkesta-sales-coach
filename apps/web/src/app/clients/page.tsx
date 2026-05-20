@@ -4,10 +4,8 @@ import { supabase } from '@/lib/supabase';
 import type { Client } from '@/lib/types';
 
 async function getClients(): Promise<Client[]> {
-  const { data } = await supabase
-    .from('clients')
-    .select('*')
-    .order('name');
+  if (!supabase) return [];
+  const { data } = await supabase.from('clients').select('*').order('name');
   return data ?? [];
 }
 

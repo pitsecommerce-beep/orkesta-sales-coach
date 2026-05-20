@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { DollarSign, Building2, AlertCircle, Tag } from 'lucide-react';
+import { DollarSign, Building2, AlertCircle, Tag, WifiOff } from 'lucide-react';
+
+const wsConfigured = Boolean(process.env.NEXT_PUBLIC_API_WS_URL);
 import { useAudioCapture } from '@/hooks/useAudioCapture';
 import { useCoachSocket } from '@/hooks/useCoachSocket';
 import { TranscriptFeed } from './TranscriptFeed';
@@ -120,6 +122,20 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
           {product.name}
         </div>
       </div>
+
+      {/* WebSocket not configured warning */}
+      {!wsConfigured && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex-shrink-0">
+          <WifiOff size={14} className="flex-shrink-0" />
+          <span>
+            <strong>Servidor de coaching no configurado.</strong>{' '}
+            <code className="text-xs bg-red-500/10 px-1 rounded">NEXT_PUBLIC_API_WS_URL</code> no está
+            definida. Las llamadas se intentarán en{' '}
+            <code className="text-xs bg-red-500/10 px-1 rounded">ws://localhost:3001/ws</code>, que puede
+            no estar disponible en este entorno.
+          </span>
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="grid grid-cols-[220px_1fr_280px] gap-4 flex-1 min-h-0">
