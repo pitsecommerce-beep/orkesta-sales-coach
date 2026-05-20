@@ -5,7 +5,7 @@ export interface Client {
   industry: string;
   pain_points: string;
   notes: string;
-  current_plan?: Record<string, unknown> | null;
+  current_plan?: Record<string, unknown>;
 }
 
 export interface Product {
@@ -15,7 +15,8 @@ export interface Product {
   min_price: number;
   suggested_price: number;
   features: string[];
-  pricing_model?: string | null;
+  pricing_model?: string;
+  pricing_tiers?: Record<string, unknown>;
 }
 
 export interface Seller {

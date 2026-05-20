@@ -160,6 +160,46 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
             </section>
           )}
 
+          {client.current_plan && (
+            <section>
+              <p className="text-xs font-semibold text-indigo-500 mb-2">Plan actual</p>
+              <div className="space-y-1.5">
+                {(client.current_plan.status as string | undefined) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Estado</span>
+                    <span className="text-xs font-medium text-slate-700 capitalize">
+                      {client.current_plan.status as string}
+                    </span>
+                  </div>
+                )}
+                {(client.current_plan.proposed_plan as string | undefined) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Plan propuesto</span>
+                    <span className="text-xs font-medium text-slate-700">
+                      {client.current_plan.proposed_plan as string}
+                    </span>
+                  </div>
+                )}
+                {(client.current_plan.stage as string | undefined) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Etapa</span>
+                    <span className="text-xs font-medium text-slate-700 capitalize">
+                      {client.current_plan.stage as string}
+                    </span>
+                  </div>
+                )}
+                {(client.current_plan.next_step as string | undefined) && (
+                  <div className="mt-1.5 p-2 bg-indigo-50 rounded-lg">
+                    <p className="text-xs text-slate-400 mb-0.5">Próximo paso</p>
+                    <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+                      {client.current_plan.next_step as string}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           <div className="border-t border-slate-100 pt-3 space-y-3">
             <h2 className="text-xs font-semibold text-slate-400">Producto</h2>
 
