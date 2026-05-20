@@ -39,7 +39,7 @@ PRODUCTO A OFRECER:
 - Descripción: ${product.description}
 - Características: ${product.features.join(', ')}
 - Precio sugerido: $${product.suggested_price.toLocaleString()} MXN
-- Precio mínimo aceptable: $${product.min_price.toLocaleString()} MXN (NUNCA ofrezcas menos)
+- Precio mínimo aceptable: $${product.min_price.toLocaleString()} MXN (NUNCA ofrezcas menos)${product.pricing_model ? `\n- MODELO COMERCIAL COMPLETO:\n${product.pricing_model}` : ''}${client.current_plan ? `\n- PLAN ACTUAL DEL CLIENTE: ${JSON.stringify(client.current_plan, null, 2)}` : ''}
 
 PERFIL DEL VENDEDOR:
 ${seller.coaching_notes || 'Sin notas de coaching previas.'}
