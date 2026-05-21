@@ -42,7 +42,7 @@ PRODUCTO A OFRECER:
 - Precio mínimo aceptable: $${product.min_price.toLocaleString()} MXN (NUNCA ofrezcas menos)${product.pricing_model ? `\n- MODELO COMERCIAL COMPLETO (úsalo para responder objeciones de precio, explicar planes y manejar negociaciones):\n${product.pricing_model}` : ''}${client.current_plan ? `\n- PLAN ACTUAL DE ESTE CLIENTE (considera esto antes de sugerir cualquier precio o upgrade):\n${JSON.stringify(client.current_plan, null, 2)}` : ''}
 
 PERFIL DEL VENDEDOR:
-${seller.coaching_notes || 'Sin notas de coaching previas.'}
+${seller.coaching_notes || 'Sin notas de coaching previas.'}${seller.agent_config?.personality ? `\nPERSONALIDAD DEL AGENTE: ${seller.agent_config.personality}` : ''}${seller.agent_config?.sales_methodology ? `\nMETODOLOGÍA DE VENTAS: ${seller.agent_config.sales_methodology}` : ''}${seller.agent_config?.forbidden_topics?.length ? `\nTEMAS PROHIBIDOS (nunca los menciones): ${seller.agent_config.forbidden_topics.join(', ')}` : ''}${seller.agent_config?.escalation_triggers?.length ? `\nSEÑALES DE CIERRE (cuando el cliente diga algo así, sugiere cerrar ya): ${seller.agent_config.escalation_triggers.join(', ')}` : ''}${seller.agent_config?.language_style ? `\nESTILO DE LENGUAJE REQUERIDO: ${seller.agent_config.language_style}` : ''}
 
 HISTORIAL DE LLAMADAS CON ESTE CLIENTE:
 ${pastCallsSummary}

@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import fastifyCors from '@fastify/cors';
 import { wsHandler } from './ws/handler.js';
+import { ttsPreviewRoute } from './routes/tts-preview.js';
 
 const server = Fastify({ logger: { level: 'info' } });
 
@@ -17,6 +18,8 @@ server.register(async (app) => {
 });
 
 server.get('/health', () => ({ ok: true, timestamp: new Date().toISOString() }));
+
+await server.register(ttsPreviewRoute);
 
 const port = Number(process.env.PORT) || 3001;
 

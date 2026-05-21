@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, PhoneCall, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, PhoneCall, Settings, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const nav = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/clients', icon: Users, label: 'Clientes' },
+  { href: '/sellers', icon: Bot, label: 'Agentes' },
   { href: '/call', icon: PhoneCall, label: 'Nueva llamada' },
   { href: '/settings', icon: Settings, label: 'Configuración' },
 ];

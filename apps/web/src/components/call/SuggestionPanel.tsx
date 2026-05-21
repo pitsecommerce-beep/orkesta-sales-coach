@@ -6,9 +6,10 @@ import type { Suggestion } from '@/lib/types';
 interface SuggestionPanelProps {
   suggestions: Suggestion[];
   currentSuggestion: string;
+  isSpeaking: boolean;
 }
 
-export function SuggestionPanel({ suggestions, currentSuggestion }: SuggestionPanelProps) {
+export function SuggestionPanel({ suggestions, currentSuggestion, isSpeaking }: SuggestionPanelProps) {
   const latest = suggestions[suggestions.length - 1];
   const history = suggestions.slice(0, -1).reverse();
   const isStreaming = currentSuggestion.length > 0;
@@ -23,6 +24,14 @@ export function SuggestionPanel({ suggestions, currentSuggestion }: SuggestionPa
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 min-h-0">
+        {/* TTS playback indicator */}
+        {isSpeaking && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl flex-shrink-0">
+            <span className="text-sm animate-pulse">🔊</span>
+            <span className="text-xs font-semibold text-emerald-700">Leyendo...</span>
+          </div>
+        )}
+
         {/* Current streaming suggestion */}
         {isStreaming && (
           <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4 animate-slide-in">

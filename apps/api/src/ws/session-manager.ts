@@ -2,6 +2,7 @@ import type { WebSocket } from '@fastify/websocket';
 import type { LiveClient } from '@deepgram/sdk';
 import { createDeepgramStream, type DeepgramWord } from '../services/deepgram.js';
 import { streamSuggestion, generateCallSummary } from '../services/claude.js';
+import { synthesizeSpeech } from '../services/tts.js';
 import { supabase } from '../services/supabase.js';
 import type { SessionContext, TranscriptEntry, ClientMessage, ServerMessage } from '../types.js';
 
@@ -144,11 +145,22 @@ export class CallSession {
 
       if (fullText) {
         this.send({ type: 'suggestion_complete', text: fullText });
+        // Fire-and-forget TTS — must never block the transcription pipeline
+        const voice = this.context?.seller.agent_config?.tts_voice ?? 'aura-asteria-es';
+        this.sendTtsAudio(fullText, voice).catch((err: unknown) => console.error('[TTS]', err));
       }
     } catch (err) {
       console.error('[Session] Claude error:', err);
     } finally {
       this.isGeneratingSuggestion = false;
+    }
+  }
+
+  private async sendTtsAudio(text: string, voice: string): Promise<void> {
+    const audioBuffer = await synthesizeSpeech(text, voice);
+    this.send({ type: 'suggestion_audio_ready' });
+    if (this.ws.readyState === 1) {
+      this.ws.send(audioBuffer);
     }
   }
 

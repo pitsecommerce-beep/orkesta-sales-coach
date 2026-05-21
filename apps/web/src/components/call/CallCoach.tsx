@@ -75,7 +75,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
     setServerError('No se pudo conectar al servidor de coaching. Verifica que NEXT_PUBLIC_API_WS_URL esté configurada correctamente.');
   }, [stopTimer]);
 
-  const { sendAudio, sendMessage, connect, disconnect } = useCoachSocket({
+  const { sendAudio, sendMessage, connect, disconnect, isSpeaking } = useCoachSocket({
     onTranscript: handleTranscript,
     onSuggestionChunk: handleSuggestionChunk,
     onSuggestionComplete: handleSuggestionComplete,
@@ -277,7 +277,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
         />
 
         {/* AI Suggestions */}
-        <SuggestionPanel suggestions={suggestions} currentSuggestion={currentSuggestion} />
+        <SuggestionPanel suggestions={suggestions} currentSuggestion={currentSuggestion} isSpeaking={isSpeaking} />
       </div>
 
       {/* Audio controls bar */}
