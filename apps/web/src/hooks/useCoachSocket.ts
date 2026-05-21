@@ -14,8 +14,9 @@ interface UseCoachSocketOptions {
   onConnectError?: () => void;
 }
 
-// How long to keep the mic paused after TTS finishes to prevent late echo pickup
-const POST_SPEAK_COOLDOWN_MS = 500;
+// How long to keep the mic paused after TTS finishes to prevent late echo pickup.
+// Needs to be long enough for speaker hardware buffers to drain completely.
+const POST_SPEAK_COOLDOWN_MS = 1200;
 
 export function useCoachSocket({
   onTranscript,
