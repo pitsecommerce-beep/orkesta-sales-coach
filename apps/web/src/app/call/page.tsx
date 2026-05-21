@@ -4,18 +4,15 @@ import { supabaseServer } from '@/lib/supabaseServer';
 
 async function getData() {
   if (!supabaseServer) {
-    return { clients: [], products: [] };
+    return { clients: [] };
   }
 
-  const [clientsRes, productsRes] = await Promise.all([
-    supabaseServer.from('clients').select('id, name, company').order('name'),
-    supabaseServer.from('products').select('id, name, suggested_price').order('name'),
-  ]);
+  const { data } = await supabaseServer
+    .from('clients')
+    .select('id, name, company, default_product_id')
+    .order('name');
 
-  return {
-    clients: clientsRes.data ?? [],
-    products: productsRes.data ?? [],
-  };
+  return { clients: data ?? [] };
 }
 
 export default async function CallSelectPage() {
@@ -32,7 +29,11 @@ export default async function CallSelectPage() {
         {clients.map((client) => (
           <Link
             key={client.id}
-            href={`/call/${client.id}`}
+            href={
+              client.default_product_id
+                ? `/call/${client.id}?productId=${client.default_product_id}`
+                : `/call/${client.id}`
+            }
             className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 group"
           >
             <div className="flex items-center gap-3">
