@@ -15,17 +15,22 @@ async function getData(
 ): Promise<{ client: Client; product: Product; sellerId: string; agentName: string } | null> {
   if (!supabaseServer) return null;
 
-  const [clientRes, productRes, sellerRes] = await Promise.all([
+  // Fetch client and seller in parallel; product depends on client's default_product_id
+  const [clientRes, sellerRes] = await Promise.all([
     supabaseServer.from('clients').select('*').eq('id', clientId).single(),
-    productId
-      ? supabaseServer.from('products').select('*').eq('id', productId).single()
-      : supabaseServer.from('products').select('*').limit(1).single(),
     supabaseServer.from('sellers').select('id, name, agent_config').limit(1).single(),
   ]);
 
   if (clientRes.error || !clientRes.data) return null;
-  if (productRes.error || !productRes.data) return null;
   if (sellerRes.error || !sellerRes.data) return null;
+
+  // Priority: URL param → client's assigned product → first product in DB
+  const effectiveProductId = productId || clientRes.data.default_product_id;
+  const productRes = effectiveProductId
+    ? await supabaseServer.from('products').select('*').eq('id', effectiveProductId).single()
+    : await supabaseServer.from('products').select('*').limit(1).single();
+
+  if (productRes.error || !productRes.data) return null;
 
   const seller = sellerRes.data as Pick<Seller, 'id' | 'name' | 'agent_config'>;
   const agentName = seller.agent_config?.persona_name || seller.name || 'Agente';
