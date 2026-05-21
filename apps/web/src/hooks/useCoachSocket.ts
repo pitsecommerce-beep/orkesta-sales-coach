@@ -14,9 +14,9 @@ interface UseCoachSocketOptions {
   onConnectError?: () => void;
 }
 
-// How long to keep the mic paused after TTS finishes to prevent late echo pickup.
-// Needs to be long enough for speaker hardware buffers to drain completely.
-const POST_SPEAK_COOLDOWN_MS = 1200;
+// Brief pause after TTS finishes before telling the backend to resume listening.
+// Lets hardware audio buffers drain; mic is still active during this period.
+const POST_SPEAK_COOLDOWN_MS = 600;
 
 export function useCoachSocket({
   onTranscript,
@@ -35,10 +35,20 @@ export function useCoachSocket({
   const expectingAudioRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
-
-  // Ref-based speaking flag so sendAudio never has a stale closure
-  const isSpeakingRef = useRef(false);
   const postSpeakTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stops any active TTS playback and signals the backend that speaking has ended.
+  const stopTts = useCallback(() => {
+    if (postSpeakTimerRef.current) clearTimeout(postSpeakTimerRef.current);
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* already ended */ }
+      activeSourceRef.current = null;
+    }
+    setIsSpeaking(false);
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'tts_ended' }));
+    }
+  }, []);
 
   const connect = useCallback((): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -77,12 +87,9 @@ export function useCoachSocket({
                 const ctx = audioCtxRef.current;
                 await ctx.resume();
 
+                // Stop any currently-playing TTS before starting the new one
                 if (activeSourceRef.current) {
-                  try {
-                    activeSourceRef.current.stop();
-                  } catch {
-                    // source may have already ended
-                  }
+                  try { activeSourceRef.current.stop(); } catch { /* already ended */ }
                   activeSourceRef.current = null;
                 }
 
@@ -91,15 +98,21 @@ export function useCoachSocket({
                 source.buffer = audioBuffer;
                 source.connect(ctx.destination);
 
-                // Mark speaking: mic will be muted until cooldown expires
                 if (postSpeakTimerRef.current) clearTimeout(postSpeakTimerRef.current);
-                isSpeakingRef.current = true;
                 setIsSpeaking(true);
 
-                const resumeListening = () => {
-                  if (postSpeakTimerRef.current) clearTimeout(postSpeakTimerRef.current);
+                // Safety: resume listening after audio duration + buffer even if onended never fires
+                const safetyTimer = setTimeout(() => {
+                  setIsSpeaking(false);
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'tts_ended' }));
+                  }
+                }, audioBuffer.duration * 1000 + 2500);
+
+                source.onended = () => {
+                  clearTimeout(safetyTimer);
+                  activeSourceRef.current = null;
                   postSpeakTimerRef.current = setTimeout(() => {
-                    isSpeakingRef.current = false;
                     setIsSpeaking(false);
                     if (wsRef.current?.readyState === WebSocket.OPEN) {
                       wsRef.current.send(JSON.stringify({ type: 'tts_ended' }));
@@ -107,25 +120,11 @@ export function useCoachSocket({
                   }, POST_SPEAK_COOLDOWN_MS);
                 };
 
-                // Safety timeout: resume listening even if onended never fires
-                const safetyTimer = setTimeout(
-                  resumeListening,
-                  audioBuffer.duration * 1000 + 2500,
-                );
-
-                source.onended = () => {
-                  clearTimeout(safetyTimer);
-                  activeSourceRef.current = null;
-                  resumeListening();
-                };
-
                 source.start();
                 activeSourceRef.current = source;
               } catch (err) {
                 console.error('[Audio playback]', err);
-                isSpeakingRef.current = false;
                 setIsSpeaking(false);
-                // Notify backend so it doesn't stay blocked waiting for tts_ended
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
                   wsRef.current.send(JSON.stringify({ type: 'tts_ended' }));
                 }
@@ -158,6 +157,10 @@ export function useCoachSocket({
           case 'agent_audio_ready':
             expectingAudioRef.current = true;
             break;
+          case 'barge_in':
+            // User spoke while agent was talking — stop TTS immediately
+            stopTts();
+            break;
           case 'session_started':
             onSessionStarted(msg.callId);
             break;
@@ -172,16 +175,17 @@ export function useCoachSocket({
 
       wsRef.current = ws;
     });
-  }, [onTranscript, onAgentChunk, onAgentResponse, onAgentIntro, onSessionStarted, onSessionEnded, onError, onConnectError]);
+  }, [onTranscript, onAgentChunk, onAgentResponse, onAgentIntro, onSessionStarted, onSessionEnded, onError, onConnectError, stopTts]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
   }, []);
 
-  // Drops audio chunks while agent TTS is playing to prevent self-echo
+  // Mic is always active — never muted. Deepgram connection stays alive.
+  // Echo suppression is handled on the backend via isAgentSpeaking + content detection.
   const sendAudio = useCallback((chunk: ArrayBuffer) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN && !isSpeakingRef.current) {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(chunk);
     }
   }, []);
