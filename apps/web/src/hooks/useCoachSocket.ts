@@ -5,8 +5,9 @@ import type { ClientMessage, ServerMessage } from '@/lib/types';
 
 interface UseCoachSocketOptions {
   onTranscript: (msg: Extract<ServerMessage, { type: 'transcript' }>) => void;
-  onSuggestionChunk: (text: string) => void;
-  onSuggestionComplete: (text: string) => void;
+  onAgentChunk: (text: string) => void;
+  onAgentResponse: (text: string) => void;
+  onAgentIntro: (text: string) => void;
   onSessionStarted: (callId: string) => void;
   onSessionEnded: () => void;
   onError: (message: string) => void;
@@ -15,8 +16,9 @@ interface UseCoachSocketOptions {
 
 export function useCoachSocket({
   onTranscript,
-  onSuggestionChunk,
-  onSuggestionComplete,
+  onAgentChunk,
+  onAgentResponse,
+  onAgentIntro,
   onSessionStarted,
   onSessionEnded,
   onError,
@@ -54,20 +56,19 @@ export function useCoachSocket({
       };
 
       ws.onmessage = (event: MessageEvent<ArrayBuffer | string>) => {
-        // Binary frame: audio payload for TTS playback
+        // Binary frame: TTS audio payload
         if (event.data instanceof ArrayBuffer) {
           if (expectingAudioRef.current) {
             expectingAudioRef.current = false;
-            const buffer = event.data.slice(0); // copy before async hand-off
+            const buffer = event.data.slice(0);
             (async () => {
               try {
                 if (!audioCtxRef.current) {
                   audioCtxRef.current = new AudioContext();
                 }
                 const ctx = audioCtxRef.current;
-                await ctx.resume(); // satisfy browser autoplay policy
+                await ctx.resume();
 
-                // Cancel any currently-playing suggestion audio
                 if (activeSourceRef.current) {
                   try {
                     activeSourceRef.current.stop();
@@ -108,13 +109,16 @@ export function useCoachSocket({
           case 'transcript':
             onTranscript(msg);
             break;
-          case 'suggestion_chunk':
-            onSuggestionChunk(msg.text);
+          case 'agent_chunk':
+            onAgentChunk(msg.text);
             break;
-          case 'suggestion_complete':
-            onSuggestionComplete(msg.text);
+          case 'agent_response':
+            onAgentResponse(msg.text);
             break;
-          case 'suggestion_audio_ready':
+          case 'agent_intro':
+            onAgentIntro(msg.text);
+            break;
+          case 'agent_audio_ready':
             expectingAudioRef.current = true;
             break;
           case 'session_started':
@@ -131,7 +135,7 @@ export function useCoachSocket({
 
       wsRef.current = ws;
     });
-  }, [onTranscript, onSuggestionChunk, onSuggestionComplete, onSessionStarted, onSessionEnded, onError, onConnectError]);
+  }, [onTranscript, onAgentChunk, onAgentResponse, onAgentIntro, onSessionStarted, onSessionEnded, onError, onConnectError]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();

@@ -7,22 +7,23 @@ const wsConfigured = Boolean(process.env.NEXT_PUBLIC_API_WS_URL);
 import { useAudioCapture } from '@/hooks/useAudioCapture';
 import { useCoachSocket } from '@/hooks/useCoachSocket';
 import { TranscriptFeed } from './TranscriptFeed';
-import { SuggestionPanel } from './SuggestionPanel';
+import { AgentResponsePanel } from './AgentResponsePanel';
 import { AudioControls } from './AudioControls';
-import type { Client, Product, TranscriptEntry, Suggestion, ServerMessage } from '@/lib/types';
+import type { Client, Product, TranscriptEntry, AgentResponse, ServerMessage } from '@/lib/types';
 
 interface CallCoachProps {
   client: Client;
   product: Product;
   sellerId: string;
+  agentName?: string;
 }
 
-export function CallCoach({ client, product, sellerId }: CallCoachProps) {
+export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: CallCoachProps) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [liveText, setLiveText] = useState('');
-  const [liveSpeaker, setLiveSpeaker] = useState<'seller' | 'client'>('client');
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [currentSuggestion, setCurrentSuggestion] = useState('');
+  const [liveSpeaker, setLiveSpeaker] = useState<'agent' | 'client'>('client');
+  const [agentResponses, setAgentResponses] = useState<AgentResponse[]>([]);
+  const [currentAgentChunk, setCurrentAgentChunk] = useState('');
   const [isCallActive, setIsCallActive] = useState(false);
   const [duration, setDuration] = useState(0);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -53,13 +54,19 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
     }
   }, []);
 
-  const handleSuggestionChunk = useCallback((text: string) => {
-    setCurrentSuggestion((prev) => prev + text);
+  const handleAgentChunk = useCallback((text: string) => {
+    setCurrentAgentChunk((prev) => prev + text);
   }, []);
 
-  const handleSuggestionComplete = useCallback((text: string) => {
-    setSuggestions((prev) => [...prev, { text, timestamp: Date.now() }]);
-    setCurrentSuggestion('');
+  const handleAgentResponse = useCallback((text: string) => {
+    setAgentResponses((prev) => [...prev, { text, timestamp: Date.now() }]);
+    setCurrentAgentChunk('');
+  }, []);
+
+  const handleAgentIntro = useCallback((text: string) => {
+    // Add intro to transcript as agent entry
+    setTranscript((prev) => [...prev, { speaker: 'agent', text, timestamp: Date.now() }]);
+    setAgentResponses((prev) => [...prev, { text, timestamp: Date.now() }]);
   }, []);
 
   const handleSessionStarted = useCallback((_callId: string) => {}, []);
@@ -72,16 +79,17 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const handleConnectError = useCallback(() => {
     setIsCallActive(false);
     stopTimer();
-    setServerError('No se pudo conectar al servidor de coaching. Verifica que NEXT_PUBLIC_API_WS_URL esté configurada correctamente.');
+    setServerError('No se pudo conectar al servidor. Verifica que NEXT_PUBLIC_API_WS_URL esté configurada correctamente.');
   }, [stopTimer]);
 
   const { sendAudio, sendMessage, connect, disconnect, isSpeaking } = useCoachSocket({
     onTranscript: handleTranscript,
-    onSuggestionChunk: handleSuggestionChunk,
-    onSuggestionComplete: handleSuggestionComplete,
+    onAgentChunk: handleAgentChunk,
+    onAgentResponse: handleAgentResponse,
+    onAgentIntro: handleAgentIntro,
     onSessionStarted: handleSessionStarted,
     onSessionEnded: handleSessionEnded,
-    onError: (msg) => { console.error('[Coach]', msg); setServerError(msg); },
+    onError: (msg) => { console.error('[Agent]', msg); setServerError(msg); },
     onConnectError: handleConnectError,
   });
 
@@ -92,8 +100,8 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
   const handleStartCall = useCallback(
     async (withSystemAudio: boolean) => {
       setTranscript([]);
-      setSuggestions([]);
-      setCurrentSuggestion('');
+      setAgentResponses([]);
+      setCurrentAgentChunk('');
       setServerError(null);
       setIsCallActive(true);
       startTimer();
@@ -104,7 +112,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
       } catch (err) {
         setIsCallActive(false);
         stopTimer();
-        setServerError(err instanceof Error ? err.message : 'Error al conectar con el servidor de coaching.');
+        setServerError(err instanceof Error ? err.message : 'Error al conectar con el servidor.');
       }
     },
     [client.id, product.id, sellerId, connect, startCapture, sendMessage, startTimer, stopTimer],
@@ -139,7 +147,7 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
         <div className="flex items-center gap-2.5 px-4 py-2.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm flex-shrink-0">
           <WifiOff size={14} className="flex-shrink-0 text-rose-400" />
           <span>
-            <strong className="font-semibold">Servidor de coaching no configurado.</strong>{' '}
+            <strong className="font-semibold">Servidor no configurado.</strong>{' '}
             <code className="text-xs bg-rose-100 px-1.5 py-0.5 rounded font-mono">NEXT_PUBLIC_API_WS_URL</code> no está definida.
           </span>
         </div>
@@ -274,10 +282,16 @@ export function CallCoach({ client, product, sellerId }: CallCoachProps) {
           liveText={liveText}
           liveSpeaker={liveSpeaker}
           isActive={isCallActive}
+          agentName={agentName}
         />
 
-        {/* AI Suggestions */}
-        <SuggestionPanel suggestions={suggestions} currentSuggestion={currentSuggestion} isSpeaking={isSpeaking} />
+        {/* Agent responses panel */}
+        <AgentResponsePanel
+          responses={agentResponses}
+          currentChunk={currentAgentChunk}
+          isSpeaking={isSpeaking}
+          agentName={agentName}
+        />
       </div>
 
       {/* Audio controls bar */}

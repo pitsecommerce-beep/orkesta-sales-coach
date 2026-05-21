@@ -4,8 +4,6 @@ import type { SessionContext, TranscriptEntry } from '../types.js';
 
 const anthropic = new Anthropic();
 
-// Lazy — only instantiated when a seller actually uses OpenAI as provider.
-// Avoids crashing the server at startup if OPENAI_API_KEY is not set.
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
@@ -19,16 +17,11 @@ function getOpenAI(): OpenAI {
 
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
-export async function streamSuggestion(
-  context: SessionContext,
-  recentTranscript: TranscriptEntry[],
-  clientUtterance: string,
-  onChunk: (text: string) => void,
-): Promise<string> {
+function buildAgentSystemPrompt(context: SessionContext): string {
   const { client, product, seller, pastCalls } = context;
+  const config = seller.agent_config;
 
-  const provider = seller.agent_config?.llm_provider ?? 'anthropic';
-  const model = seller.agent_config?.llm_model ?? DEFAULT_ANTHROPIC_MODEL;
+  const personaName = config?.persona_name || seller.name || 'Agente';
 
   const pastCallsSummary =
     pastCalls.length > 0
@@ -38,47 +31,73 @@ export async function streamSuggestion(
               `- ${new Date(c.created_at).toLocaleDateString('es-MX')}: ${c.ai_notes ?? 'Sin notas'} | Resultado: ${c.outcome ?? 'No registrado'}`,
           )
           .join('\n')
-      : 'Esta es la primera llamada con este cliente.';
+      : 'Esta es la primera conversación con este cliente.';
 
-  const transcriptBlock = recentTranscript
-    .slice(-12)
-    .map((t) => `${t.speaker === 'seller' ? 'VENDEDOR' : 'CLIENTE'}: ${t.text}`)
-    .join('\n');
+  return `Eres ${personaName}, un agente de ventas especializado. Estás hablando DIRECTAMENTE con ${client.name} de ${client.company} (${client.industry}).${config?.personality ? `\n\nTU PERSONALIDAD: ${config.personality}` : ''}${config?.sales_methodology ? `\nTU METODOLOGÍA DE VENTAS: ${config.sales_methodology}` : ''}
 
-  const systemPrompt = `Eres Orkesta, el mejor coach de ventas del mundo. Asistes a un vendedor durante una llamada en TIEMPO REAL.
-
-CONTEXTO DEL CLIENTE:
+INFORMACIÓN DEL CLIENTE:
 - Nombre: ${client.name}
 - Empresa: ${client.company} (${client.industry})
-- Pain points: ${client.pain_points || 'No especificado'}
-- Notas adicionales: ${client.notes || 'Ninguna'}
+- Pain points conocidos: ${client.pain_points || 'No especificados'}
+- Notas: ${client.notes || 'Ninguna'}${client.current_plan ? `\n- Plan actual: ${JSON.stringify(client.current_plan)}` : ''}
 
-PRODUCTO A OFRECER:
+PRODUCTO QUE OFRECES:
 - Nombre: ${product.name}
 - Descripción: ${product.description}
 - Características: ${product.features.join(', ')}
 - Precio sugerido: $${product.suggested_price.toLocaleString()} MXN
-- Precio mínimo aceptable: $${product.min_price.toLocaleString()} MXN (NUNCA ofrezcas menos)${product.pricing_model ? `\n- MODELO COMERCIAL COMPLETO (úsalo para responder objeciones de precio, explicar planes y manejar negociaciones):\n${product.pricing_model}` : ''}${client.current_plan ? `\n- PLAN ACTUAL DE ESTE CLIENTE (considera esto antes de sugerir cualquier precio o upgrade):\n${JSON.stringify(client.current_plan, null, 2)}` : ''}
+- Precio mínimo: $${product.min_price.toLocaleString()} MXN (nunca ofrezcas menos)${product.pricing_model ? `\n- Modelo comercial: ${product.pricing_model}` : ''}
 
-PERFIL DEL VENDEDOR:
-${seller.coaching_notes || 'Sin notas de coaching previas.'}${seller.agent_config?.personality ? `\nPERSONALIDAD DEL AGENTE: ${seller.agent_config.personality}` : ''}${seller.agent_config?.sales_methodology ? `\nMETODOLOGÍA DE VENTAS: ${seller.agent_config.sales_methodology}` : ''}${seller.agent_config?.forbidden_topics?.length ? `\nTEMAS PROHIBIDOS (nunca los menciones): ${seller.agent_config.forbidden_topics.join(', ')}` : ''}${seller.agent_config?.escalation_triggers?.length ? `\nSEÑALES DE CIERRE (cuando el cliente diga algo así, sugiere cerrar ya): ${seller.agent_config.escalation_triggers.join(', ')}` : ''}${seller.agent_config?.language_style ? `\nESTILO DE LENGUAJE REQUERIDO: ${seller.agent_config.language_style}` : ''}
-
-HISTORIAL DE LLAMADAS CON ESTE CLIENTE:
+HISTORIAL CON ESTE CLIENTE:
 ${pastCallsSummary}
+${config?.forbidden_topics?.length ? `\nTEMAS PROHIBIDOS: ${config.forbidden_topics.join(', ')}` : ''}${config?.escalation_triggers?.length ? `\nSEÑALES DE CIERRE (cuando el cliente lo indique, propón cerrar): ${config.escalation_triggers.join(', ')}` : ''}
 
 REGLAS:
-1. Tu respuesta es el GUIÓN EXACTO que el vendedor debe decir, sin prefacio
-2. Máximo 2 oraciones, directo al punto
-3. Nunca sugieras precio menor a $${product.min_price.toLocaleString()} MXN
-4. Adapta el tono: si el cliente es formal, responde formal; si es casual, casual
-5. Responde en español`;
+1. Habla en primera persona, eres tú quien responde al cliente directamente
+2. Máximo 2-3 oraciones, conciso y directo
+3. Nunca ofrezcas precio menor a $${product.min_price.toLocaleString()} MXN
+4. Adapta tu tono: ${config?.language_style === 'formal' ? 'formal y profesional' : config?.language_style === 'tecnico' ? 'técnico y preciso' : 'cercano y natural'}
+5. Responde siempre en español`;
+}
 
-  const userMessage = `Conversación reciente:\n${transcriptBlock}\n\nEl cliente acaba de decir: "${clientUtterance}"\n\n¿Qué debe decir el vendedor AHORA?`;
+export async function streamAgentResponse(
+  context: SessionContext,
+  recentTranscript: TranscriptEntry[],
+  clientUtterance: string,
+  onChunk: (text: string) => void,
+): Promise<string> {
+  const provider = context.seller.agent_config?.llm_provider ?? 'anthropic';
+  const model = context.seller.agent_config?.llm_model ?? DEFAULT_ANTHROPIC_MODEL;
+
+  const systemPrompt = buildAgentSystemPrompt(context);
+
+  const transcriptBlock = recentTranscript
+    .slice(-12)
+    .map((t) => `${t.speaker === 'agent' ? 'TÚ (AGENTE)' : 'CLIENTE'}: ${t.text}`)
+    .join('\n');
+
+  const userMessage = `Conversación reciente:\n${transcriptBlock}\n\nEl cliente acaba de decir: "${clientUtterance}"\n\n¿Qué respondes tú como agente?`;
 
   if (provider === 'openai') {
     return streamOpenAI(model, systemPrompt, userMessage, onChunk);
   }
   return streamAnthropic(model, systemPrompt, userMessage, onChunk);
+}
+
+export async function generateIntroduction(context: SessionContext): Promise<string> {
+  const { client, product, seller } = context;
+  const config = seller.agent_config;
+  const personaName = config?.persona_name || seller.name || 'Agente';
+  const provider = config?.llm_provider ?? 'anthropic';
+  const model = config?.llm_model ?? DEFAULT_ANTHROPIC_MODEL;
+
+  const systemPrompt = buildAgentSystemPrompt(context);
+  const userMessage = `Genera tu saludo inicial para comenzar la llamada con ${client.name}. Preséntate como ${personaName}, menciona brevemente el producto "${product.name}" y abre la conversación de forma natural. Máximo 2 oraciones.`;
+
+  if (provider === 'openai') {
+    return streamOpenAI(model, systemPrompt, userMessage, () => {});
+  }
+  return streamAnthropic(model, systemPrompt, userMessage, () => {});
 }
 
 async function streamAnthropic(
@@ -89,7 +108,7 @@ async function streamAnthropic(
 ): Promise<string> {
   const stream = anthropic.messages.stream({
     model,
-    max_tokens: 200,
+    max_tokens: 250,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
   });
@@ -112,7 +131,7 @@ async function streamOpenAI(
 ): Promise<string> {
   const stream = await getOpenAI().chat.completions.create({
     model,
-    max_tokens: 200,
+    max_tokens: 250,
     stream: true,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -133,7 +152,7 @@ async function streamOpenAI(
 
 export async function generateCallSummary(transcript: TranscriptEntry[]): Promise<string> {
   const transcriptText = transcript
-    .map((t) => `${t.speaker === 'seller' ? 'VENDEDOR' : 'CLIENTE'}: ${t.text}`)
+    .map((t) => `${t.speaker === 'agent' ? 'AGENTE' : 'CLIENTE'}: ${t.text}`)
     .join('\n');
 
   const response = await anthropic.messages.create({
@@ -142,7 +161,7 @@ export async function generateCallSummary(transcript: TranscriptEntry[]): Promis
     messages: [
       {
         role: 'user',
-        content: `Resume esta llamada de ventas en 4-5 puntos clave para el CRM. Incluye: interés del cliente, objeciones principales, acuerdos alcanzados y próximos pasos. Usa bullets.\n\nTranscripción:\n${transcriptText}`,
+        content: `Resume esta conversación de ventas en 4-5 puntos clave para el CRM. Incluye: interés del cliente, objeciones principales, acuerdos alcanzados y próximos pasos. Usa bullets.\n\nTranscripción:\n${transcriptText}`,
       },
     ],
   });

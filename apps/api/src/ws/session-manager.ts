@@ -1,7 +1,7 @@
 import type { WebSocket } from '@fastify/websocket';
 import type { LiveClient } from '@deepgram/sdk';
 import { createDeepgramStream, type DeepgramWord } from '../services/deepgram.js';
-import { streamSuggestion, generateCallSummary } from '../services/claude.js';
+import { streamAgentResponse, generateIntroduction, generateCallSummary } from '../services/claude.js';
 import { synthesizeSpeech } from '../services/tts.js';
 import { supabase } from '../services/supabase.js';
 import type { SessionContext, TranscriptEntry, ClientMessage, ServerMessage } from '../types.js';
@@ -11,13 +11,11 @@ export class CallSession {
   private transcript: TranscriptEntry[] = [];
   private callId: string | null = null;
   private deepgramConn: LiveClient | null = null;
-  private sellerSpeakerId = 0;
-  private isGeneratingSuggestion = false;
+  private isGeneratingResponse = false;
 
   constructor(private readonly ws: WebSocket) {}
 
   async handleMessage(raw: Buffer | string, isBinary = false) {
-    // isBinary reliably identifies binary WebSocket frames regardless of Buffer wrapping
     if (isBinary) {
       if (!this.deepgramConn) {
         console.warn('[Session] Audio received but no Deepgram session active — start_session may not have been received');
@@ -44,9 +42,6 @@ export class CallSession {
         break;
       case 'end_session':
         await this.endSession();
-        break;
-      case 'set_seller_speaker':
-        this.sellerSpeakerId = msg.speakerId;
         break;
     }
   }
@@ -89,9 +84,31 @@ export class CallSession {
       this.startDeepgram();
       console.log('[Session] Started successfully, callId:', this.callId);
       this.send({ type: 'session_started', callId: this.callId });
+
+      // Agent introduces itself immediately after session starts
+      this.sendAgentIntroduction().catch((err: unknown) => console.error('[Intro]', err));
     } catch (err) {
       console.error('[Session] Failed to start:', err);
       this.send({ type: 'error', message: 'Error al iniciar la sesión. Verifica la configuración.' });
+    }
+  }
+
+  private async sendAgentIntroduction() {
+    if (!this.context) return;
+    try {
+      const introText = await generateIntroduction(this.context);
+      if (!introText) return;
+
+      // Add introduction to transcript as agent
+      const entry: TranscriptEntry = { speaker: 'agent', text: introText, timestamp: Date.now() };
+      this.transcript.push(entry);
+
+      this.send({ type: 'agent_intro', text: introText });
+
+      const voice = this.context.seller.agent_config?.tts_voice ?? 'aura-asteria-es';
+      await this.sendTtsAudio(introText, voice);
+    } catch (err) {
+      console.error('[Session] Failed to generate intro:', err);
     }
   }
 
@@ -103,62 +120,70 @@ export class CallSession {
     );
   }
 
-  private async onTranscript(transcript: string, words: DeepgramWord[], isFinal: boolean) {
+  private async onTranscript(transcript: string, _words: DeepgramWord[], isFinal: boolean) {
     if (!transcript.trim()) return;
 
-    // Determine speaker from first word with a speaker label
-    const speakerId = words.find((w) => w.speaker !== undefined)?.speaker ?? this.sellerSpeakerId;
-    const isClient = speakerId !== this.sellerSpeakerId;
-    const speaker: 'seller' | 'client' = isClient ? 'client' : 'seller';
-
+    // All incoming audio is from the client
     this.send({
       type: 'transcript',
       text: transcript,
-      speaker,
-      speakerId,
+      speaker: 'client',
       isFinal,
       timestamp: Date.now(),
     });
 
     if (isFinal) {
-      const entry: TranscriptEntry = { speaker, text: transcript, timestamp: Date.now() };
+      const entry: TranscriptEntry = { speaker: 'client', text: transcript, timestamp: Date.now() };
       this.transcript.push(entry);
 
-      // Generate coaching suggestion only when client finishes speaking
-      if (isClient && !this.isGeneratingSuggestion && this.context) {
-        await this.generateSuggestion(transcript);
+      // Generate agent response when client finishes speaking
+      if (!this.isGeneratingResponse && this.context) {
+        await this.generateAgentResponse(transcript);
       }
     }
   }
 
-  private async generateSuggestion(clientUtterance: string) {
+  private async generateAgentResponse(clientUtterance: string) {
     if (!this.context) return;
-    this.isGeneratingSuggestion = true;
+    this.isGeneratingResponse = true;
 
     try {
-      const fullText = await streamSuggestion(
+      const fullText = await streamAgentResponse(
         this.context,
         this.transcript,
         clientUtterance,
-        (chunk) => this.send({ type: 'suggestion_chunk', text: chunk }),
+        (chunk) => this.send({ type: 'agent_chunk', text: chunk }),
       );
 
       if (fullText) {
-        this.send({ type: 'suggestion_complete', text: fullText });
-        // Fire-and-forget TTS — must never block the transcription pipeline
+        // Add agent response to transcript
+        const entry: TranscriptEntry = { speaker: 'agent', text: fullText, timestamp: Date.now() };
+        this.transcript.push(entry);
+
+        this.send({ type: 'agent_response', text: fullText });
+
+        // Send transcript entry so frontend can display it immediately
+        this.send({
+          type: 'transcript',
+          text: fullText,
+          speaker: 'agent',
+          isFinal: true,
+          timestamp: entry.timestamp,
+        });
+
         const voice = this.context?.seller.agent_config?.tts_voice ?? 'aura-asteria-es';
         this.sendTtsAudio(fullText, voice).catch((err: unknown) => console.error('[TTS]', err));
       }
     } catch (err) {
-      console.error('[Session] Claude error:', err);
+      console.error('[Session] Agent response error:', err);
     } finally {
-      this.isGeneratingSuggestion = false;
+      this.isGeneratingResponse = false;
     }
   }
 
   private async sendTtsAudio(text: string, voice: string): Promise<void> {
     const audioBuffer = await synthesizeSpeech(text, voice);
-    this.send({ type: 'suggestion_audio_ready' });
+    this.send({ type: 'agent_audio_ready' });
     if (this.ws.readyState === 1) {
       this.ws.send(audioBuffer);
     }
