@@ -2,6 +2,7 @@ import { createClient, LiveTranscriptionEvents, type LiveClient } from '@deepgra
 
 export function createDeepgramStream(
   onTranscript: (transcript: string, words: DeepgramWord[], isFinal: boolean) => void,
+  onUtteranceEnd: () => void,
   onError: (err: Error) => void,
   onClose: () => void,
 ): LiveClient {
@@ -15,7 +16,7 @@ export function createDeepgramStream(
     encoding: 'opus',
     container: 'webm',
     interim_results: true,
-    utterance_end_ms: 1000,
+    utterance_end_ms: 1200,
   });
 
   // Track the last is_final transcript so UtteranceEnd can finalize it
@@ -32,22 +33,25 @@ export function createDeepgramStream(
     const alt = data.channel?.alternatives?.[0];
     if (!alt?.transcript) return;
 
-    const isFinal = (data.speech_final ?? false) as boolean;
+    const isSpeechFinal = (data.speech_final ?? false) as boolean;
 
     if ((data.is_final ?? false) as boolean) {
       pendingTranscript = alt.transcript;
       pendingWords = (alt.words ?? []) as DeepgramWord[];
     }
 
-    if (isFinal) {
+    if (isSpeechFinal) {
       speechFinalSent = true;
     }
 
-    onTranscript(alt.transcript, (alt.words ?? []) as DeepgramWord[], isFinal);
+    // Always forward transcript events for live display.
+    // isFinal here means speech_final — used for transcript display only.
+    // Response generation is gated on UtteranceEnd, not speech_final.
+    onTranscript(alt.transcript, (alt.words ?? []) as DeepgramWord[], isSpeechFinal);
   });
 
-  // Deepgram fires UtteranceEnd after utterance_end_ms of silence.
-  // If speech_final never fired for the last utterance, emit it now.
+  // UtteranceEnd fires after utterance_end_ms of silence — this is the real
+  // end-of-turn signal. If speech_final never fired, emit the pending transcript first.
   connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
     if (!speechFinalSent && pendingTranscript) {
       onTranscript(pendingTranscript, pendingWords, true);
@@ -55,6 +59,8 @@ export function createDeepgramStream(
     pendingTranscript = '';
     pendingWords = [];
     speechFinalSent = false;
+
+    onUtteranceEnd();
   });
 
   connection.on(LiveTranscriptionEvents.Error, (err) => {

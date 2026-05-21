@@ -12,6 +12,10 @@ export class CallSession {
   private callId: string | null = null;
   private deepgramConn: LiveClient | null = null;
   private isGeneratingResponse = false;
+  // Accumulates speech_final segments until UtteranceEnd confirms turn is over
+  private pendingUtterance: string[] = [];
+  // True while agent TTS audio is being played — used to discard echo transcripts
+  private isAgentSpeaking = false;
 
   constructor(private readonly ws: WebSocket) {}
 
@@ -42,6 +46,11 @@ export class CallSession {
         break;
       case 'end_session':
         await this.endSession();
+        break;
+      case 'tts_ended':
+        // Frontend signals TTS playback finished — agent can listen again
+        this.isAgentSpeaking = false;
+        console.log('[Session] TTS playback ended, resuming listening');
         break;
     }
   }
@@ -99,7 +108,6 @@ export class CallSession {
       const introText = await generateIntroduction(this.context);
       if (!introText) return;
 
-      // Add introduction to transcript as agent
       const entry: TranscriptEntry = { speaker: 'agent', text: introText, timestamp: Date.now() };
       this.transcript.push(entry);
 
@@ -115,6 +123,7 @@ export class CallSession {
   private startDeepgram() {
     this.deepgramConn = createDeepgramStream(
       (transcript, words, isFinal) => this.onTranscript(transcript, words, isFinal),
+      () => this.onUtteranceEnd(),
       (err) => this.send({ type: 'error', message: `Transcripción: ${err.message}` }),
       () => console.log('[Session] Deepgram closed'),
     );
@@ -123,7 +132,10 @@ export class CallSession {
   private async onTranscript(transcript: string, _words: DeepgramWord[], isFinal: boolean) {
     if (!transcript.trim()) return;
 
-    // All incoming audio is from the client
+    // Discard anything transcribed while agent is speaking — it's echo
+    if (this.isAgentSpeaking) return;
+
+    // Send to frontend for live display
     this.send({
       type: 'transcript',
       text: transcript,
@@ -135,12 +147,28 @@ export class CallSession {
     if (isFinal) {
       const entry: TranscriptEntry = { speaker: 'client', text: transcript, timestamp: Date.now() };
       this.transcript.push(entry);
-
-      // Generate agent response when client finishes speaking
-      if (!this.isGeneratingResponse && this.context) {
-        await this.generateAgentResponse(transcript);
-      }
+      // Accumulate speech_final segments — response fires only on UtteranceEnd
+      this.pendingUtterance.push(transcript);
     }
+  }
+
+  // Called by Deepgram after utterance_end_ms of silence — the real end-of-turn signal
+  private async onUtteranceEnd() {
+    // If agent is still speaking, discard any echo that leaked through
+    if (this.isAgentSpeaking) {
+      this.pendingUtterance = [];
+      return;
+    }
+
+    if (this.pendingUtterance.length === 0 || this.isGeneratingResponse || !this.context) {
+      this.pendingUtterance = [];
+      return;
+    }
+
+    const fullUtterance = this.pendingUtterance.join(' ').trim();
+    this.pendingUtterance = [];
+
+    await this.generateAgentResponse(fullUtterance);
   }
 
   private async generateAgentResponse(clientUtterance: string) {
@@ -156,13 +184,11 @@ export class CallSession {
       );
 
       if (fullText) {
-        // Add agent response to transcript
         const entry: TranscriptEntry = { speaker: 'agent', text: fullText, timestamp: Date.now() };
         this.transcript.push(entry);
 
         this.send({ type: 'agent_response', text: fullText });
 
-        // Send transcript entry so frontend can display it immediately
         this.send({
           type: 'transcript',
           text: fullText,
@@ -182,11 +208,13 @@ export class CallSession {
   }
 
   private async sendTtsAudio(text: string, voice: string): Promise<void> {
+    this.isAgentSpeaking = true;
     const audioBuffer = await synthesizeSpeech(text, voice);
     this.send({ type: 'agent_audio_ready' });
     if (this.ws.readyState === 1) {
       this.ws.send(audioBuffer);
     }
+    // isAgentSpeaking is cleared when frontend sends tts_ended
   }
 
   private async endSession() {
