@@ -76,7 +76,8 @@ export interface AgentResponse {
 // WebSocket messages: Client → Server
 export type ClientMessage =
   | { type: 'start_session'; clientId: string; productId: string; sellerId: string }
-  | { type: 'end_session' };
+  | { type: 'end_session' }
+  | { type: 'tts_ended' };
 
 // WebSocket messages: Server → Client
 export type ServerMessage =

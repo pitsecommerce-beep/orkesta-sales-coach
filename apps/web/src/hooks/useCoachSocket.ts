@@ -14,6 +14,9 @@ interface UseCoachSocketOptions {
   onConnectError?: () => void;
 }
 
+// How long to keep the mic paused after TTS finishes to prevent late echo pickup
+const POST_SPEAK_COOLDOWN_MS = 500;
+
 export function useCoachSocket({
   onTranscript,
   onAgentChunk,
@@ -31,6 +34,10 @@ export function useCoachSocket({
   const expectingAudioRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Ref-based speaking flag so sendAudio never has a stale closure
+  const isSpeakingRef = useRef(false);
+  const postSpeakTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback((): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -82,15 +89,30 @@ export function useCoachSocket({
                 const source = ctx.createBufferSource();
                 source.buffer = audioBuffer;
                 source.connect(ctx.destination);
+
+                // Mark speaking: mic will be muted until cooldown expires
+                if (postSpeakTimerRef.current) clearTimeout(postSpeakTimerRef.current);
+                isSpeakingRef.current = true;
                 setIsSpeaking(true);
+
                 source.onended = () => {
-                  setIsSpeaking(false);
                   activeSourceRef.current = null;
+                  // Keep mic muted briefly to absorb reverb / late echo
+                  postSpeakTimerRef.current = setTimeout(() => {
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+                    // Notify backend so it resumes listening
+                    if (wsRef.current?.readyState === WebSocket.OPEN) {
+                      wsRef.current.send(JSON.stringify({ type: 'tts_ended' }));
+                    }
+                  }, POST_SPEAK_COOLDOWN_MS);
                 };
+
                 source.start();
                 activeSourceRef.current = source;
               } catch (err) {
                 console.error('[Audio playback]', err);
+                isSpeakingRef.current = false;
                 setIsSpeaking(false);
               }
             })();
@@ -142,8 +164,9 @@ export function useCoachSocket({
     wsRef.current = null;
   }, []);
 
+  // Drops audio chunks while agent TTS is playing to prevent self-echo
   const sendAudio = useCallback((chunk: ArrayBuffer) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === WebSocket.OPEN && !isSpeakingRef.current) {
       wsRef.current.send(chunk);
     }
   }, []);
