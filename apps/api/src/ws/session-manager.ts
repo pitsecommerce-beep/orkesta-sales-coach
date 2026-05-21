@@ -209,12 +209,21 @@ export class CallSession {
 
   private async sendTtsAudio(text: string, voice: string): Promise<void> {
     this.isAgentSpeaking = true;
-    const audioBuffer = await synthesizeSpeech(text, voice);
-    this.send({ type: 'agent_audio_ready' });
-    if (this.ws.readyState === 1) {
-      this.ws.send(audioBuffer);
+    try {
+      const audioBuffer = await synthesizeSpeech(text, voice);
+      this.send({ type: 'agent_audio_ready' });
+      if (this.ws.readyState === 1) {
+        this.ws.send(audioBuffer);
+      }
+      // Safety timeout: clear isAgentSpeaking if tts_ended never arrives from frontend.
+      // Estimate ~80ms per character + 3s buffer, capped at 30s.
+      const safetyMs = Math.min(30000, Math.max(5000, text.length * 80 + 3000));
+      setTimeout(() => { this.isAgentSpeaking = false; }, safetyMs);
+    } catch (err) {
+      // Reset immediately so the agent can still listen after a TTS failure
+      this.isAgentSpeaking = false;
+      throw err;
     }
-    // isAgentSpeaking is cleared when frontend sends tts_ended
   }
 
   private async endSession() {
