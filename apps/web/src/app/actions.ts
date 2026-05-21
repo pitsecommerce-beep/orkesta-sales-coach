@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseServer } from '@/lib/supabaseServer';
+import type { AgentConfig } from '@/lib/types';
 
 export async function createClientAction(formData: FormData): Promise<{ error?: string }> {
   if (!supabaseServer) return { error: 'Base de datos no configurada.' };
@@ -85,4 +86,22 @@ export async function importClientsAction(rows: Record<string, string>[]) {
 
   revalidatePath('/clients');
   return { inserted: toInsert.length, updated: toUpdate.length };
+}
+
+export async function updateSellerAgentConfig(
+  sellerId: string,
+  agentConfig: AgentConfig,
+): Promise<{ error?: string }> {
+  if (!supabaseServer) return { error: 'Base de datos no configurada.' };
+
+  const { error } = await supabaseServer
+    .from('sellers')
+    .update({ agent_config: agentConfig })
+    .eq('id', sellerId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/sellers/${sellerId}/agent`);
+  revalidatePath('/sellers');
+  return {};
 }

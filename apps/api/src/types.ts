@@ -19,10 +19,21 @@ export interface Product {
   pricing_tiers?: Record<string, unknown>;
 }
 
+export interface AgentConfig {
+  persona_name?: string;
+  tts_voice?: string;
+  personality?: string;
+  sales_methodology?: string;
+  forbidden_topics?: string[];
+  escalation_triggers?: string[];
+  language_style?: 'formal' | 'casual' | 'tecnico';
+}
+
 export interface Seller {
   id: string;
   name: string;
   coaching_notes: string;
+  agent_config?: AgentConfig;
 }
 
 export interface PastCall {
@@ -57,5 +68,6 @@ export type ServerMessage =
   | { type: 'transcript'; text: string; speaker: 'seller' | 'client'; speakerId: number; isFinal: boolean; timestamp: number }
   | { type: 'suggestion_chunk'; text: string }
   | { type: 'suggestion_complete'; text: string }
+  | { type: 'suggestion_audio_ready' }
   | { type: 'session_ended' }
   | { type: 'error'; message: string };
