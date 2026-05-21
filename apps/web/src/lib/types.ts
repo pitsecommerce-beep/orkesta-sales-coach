@@ -33,6 +33,8 @@ export interface AgentConfig {
   forbidden_topics?: string[];
   escalation_triggers?: string[];
   language_style?: 'formal' | 'casual' | 'tecnico';
+  llm_provider?: 'anthropic' | 'openai';
+  llm_model?: string;
 }
 
 export interface Seller {

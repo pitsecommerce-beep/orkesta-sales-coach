@@ -1,7 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import type { SessionContext, TranscriptEntry } from '../types.js';
 
 const anthropic = new Anthropic();
+const openaiClient = new OpenAI();
+
+const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
 export async function streamSuggestion(
   context: SessionContext,
@@ -10,6 +14,9 @@ export async function streamSuggestion(
   onChunk: (text: string) => void,
 ): Promise<string> {
   const { client, product, seller, pastCalls } = context;
+
+  const provider = seller.agent_config?.llm_provider ?? 'anthropic';
+  const model = seller.agent_config?.llm_model ?? DEFAULT_ANTHROPIC_MODEL;
 
   const pastCallsSummary =
     pastCalls.length > 0
@@ -54,27 +61,61 @@ REGLAS:
 4. Adapta el tono: si el cliente es formal, responde formal; si es casual, casual
 5. Responde en español`;
 
+  const userMessage = `Conversación reciente:\n${transcriptBlock}\n\nEl cliente acaba de decir: "${clientUtterance}"\n\n¿Qué debe decir el vendedor AHORA?`;
+
+  if (provider === 'openai') {
+    return streamOpenAI(model, systemPrompt, userMessage, onChunk);
+  }
+  return streamAnthropic(model, systemPrompt, userMessage, onChunk);
+}
+
+async function streamAnthropic(
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  onChunk: (text: string) => void,
+): Promise<string> {
   const stream = anthropic.messages.stream({
-    model: 'claude-sonnet-4-6',
+    model,
     max_tokens: 200,
     system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: `Conversación reciente:\n${transcriptBlock}\n\nEl cliente acaba de decir: "${clientUtterance}"\n\n¿Qué debe decir el vendedor AHORA?`,
-      },
-    ],
+    messages: [{ role: 'user', content: userMessage }],
   });
 
   let fullText = '';
-
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
       fullText += event.delta.text;
       onChunk(event.delta.text);
     }
   }
+  return fullText;
+}
 
+async function streamOpenAI(
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  onChunk: (text: string) => void,
+): Promise<string> {
+  const stream = await openaiClient.chat.completions.create({
+    model,
+    max_tokens: 200,
+    stream: true,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ],
+  });
+
+  let fullText = '';
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content ?? '';
+    if (delta) {
+      fullText += delta;
+      onChunk(delta);
+    }
+  }
   return fullText;
 }
 
@@ -84,7 +125,7 @@ export async function generateCallSummary(transcript: TranscriptEntry[]): Promis
     .join('\n');
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: DEFAULT_ANTHROPIC_MODEL,
     max_tokens: 600,
     messages: [
       {

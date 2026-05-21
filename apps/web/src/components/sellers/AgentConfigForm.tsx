@@ -1,16 +1,73 @@
 'use client';
 
 import { useState, useTransition, KeyboardEvent } from 'react';
-import { Bot, Volume2, Loader2, CheckCircle2, X, Plus } from 'lucide-react';
+import { Bot, Volume2, Loader2, CheckCircle2, X, Plus, Cpu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { updateSellerAgentConfig } from '@/app/actions';
 import type { AgentConfig, Seller } from '@/lib/types';
 
-const TTS_VOICES = [
-  { value: 'aura-asteria-es', label: 'Valeria', description: 'Femenino · Natural' },
-  { value: 'aura-orion-es', label: 'Orion', description: 'Masculino · Profesional' },
-  { value: 'aura-luna-es', label: 'Luna', description: 'Femenino · Cálido' },
+// ── Deepgram Aura 2 voices grouped by Spanish accent ────────────────────────
+const TTS_VOICE_GROUPS = [
+  {
+    label: '🇨🇴 Colombia',
+    voices: [
+      { value: 'aura-2-celeste-es', label: 'Celeste', gender: 'Femenino' },
+      { value: 'aura-2-gloria-es', label: 'Gloria', gender: 'Femenino' },
+    ],
+  },
+  {
+    label: '🇲🇽 México',
+    voices: [
+      { value: 'aura-2-estrella-es', label: 'Estrella', gender: 'Femenino' },
+      { value: 'aura-2-olivia-es', label: 'Olivia', gender: 'Femenino' },
+      { value: 'aura-2-luciano-es', label: 'Luciano', gender: 'Masculino' },
+      { value: 'aura-2-sirio-es', label: 'Sirio', gender: 'Masculino' },
+      { value: 'aura-2-valerio-es', label: 'Valerio', gender: 'Masculino' },
+    ],
+  },
+  {
+    label: '🌎 Latinoamérica',
+    voices: [
+      { value: 'aura-2-aquila-es', label: 'Aquila', gender: 'Masculino' },
+      { value: 'aura-2-javier-es', label: 'Javier', gender: 'Masculino' },
+      { value: 'aura-2-selena-es', label: 'Selena', gender: 'Femenino' },
+      { value: 'aura-2-antonia-es', label: 'Antonia', gender: 'Femenino · Argentina' },
+    ],
+  },
+  {
+    label: '🇪🇸 Peninsular',
+    voices: [
+      { value: 'aura-2-alvaro-es', label: 'Álvaro', gender: 'Masculino' },
+      { value: 'aura-2-agustina-es', label: 'Agustina', gender: 'Femenino' },
+      { value: 'aura-2-carina-es', label: 'Carina', gender: 'Femenino' },
+      { value: 'aura-2-diana-es', label: 'Diana', gender: 'Femenino' },
+      { value: 'aura-2-nestor-es', label: 'Néstor', gender: 'Masculino' },
+      { value: 'aura-2-silvia-es', label: 'Silvia', gender: 'Femenino' },
+    ],
+  },
 ] as const;
+
+// ── LLM provider / model catalogue ──────────────────────────────────────────
+const LLM_CONFIG = {
+  anthropic: {
+    label: 'Anthropic (Claude)',
+    models: [
+      { value: 'claude-opus-4-7', label: 'Opus 4.7 — Máxima capacidad' },
+      { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 — Equilibrado (recomendado)' },
+      { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 — Ultra rápido' },
+    ],
+  },
+  openai: {
+    label: 'OpenAI',
+    models: [
+      { value: 'gpt-4o', label: 'GPT-4o — Máxima capacidad' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini — Rápido y económico' },
+    ],
+  },
+} as const satisfies Record<
+  NonNullable<AgentConfig['llm_provider']>,
+  { label: string; models: { value: string; label: string }[] }
+>;
 
 const LANGUAGE_STYLES = [
   { value: 'formal', label: 'Formal' },
@@ -18,6 +75,7 @@ const LANGUAGE_STYLES = [
   { value: 'tecnico', label: 'Técnico' },
 ] as const;
 
+// ── Tag input ────────────────────────────────────────────────────────────────
 interface TagInputProps {
   value: string[];
   onChange: (value: string[]) => void;
@@ -29,9 +87,7 @@ function TagInput({ value, onChange, placeholder }: TagInputProps) {
 
   const addTag = (tag: string) => {
     const trimmed = tag.trim();
-    if (trimmed && !value.includes(trimmed)) {
-      onChange([...value, trimmed]);
-    }
+    if (trimmed && !value.includes(trimmed)) onChange([...value, trimmed]);
     setInputValue('');
   };
 
@@ -70,11 +126,7 @@ function TagInput({ value, onChange, placeholder }: TagInputProps) {
         className="flex-1 min-w-[120px] bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
       />
       {inputValue.trim() && (
-        <button
-          type="button"
-          onClick={() => addTag(inputValue)}
-          className="text-indigo-400 hover:text-indigo-600 transition-colors"
-        >
+        <button type="button" onClick={() => addTag(inputValue)} className="text-indigo-400 hover:text-indigo-600 transition-colors">
           <Plus size={14} />
         </button>
       )}
@@ -82,14 +134,16 @@ function TagInput({ value, onChange, placeholder }: TagInputProps) {
   );
 }
 
+// ── Main form ────────────────────────────────────────────────────────────────
 interface AgentConfigFormProps {
   seller: Seller;
 }
 
 export function AgentConfigForm({ seller }: AgentConfigFormProps) {
   const initial = seller.agent_config ?? {};
+
   const [personaName, setPersonaName] = useState(initial.persona_name ?? '');
-  const [ttsVoice, setTtsVoice] = useState<string>(initial.tts_voice ?? 'aura-asteria-es');
+  const [ttsVoice, setTtsVoice] = useState<string>(initial.tts_voice ?? 'aura-2-celeste-es');
   const [personality, setPersonality] = useState(initial.personality ?? '');
   const [languageStyle, setLanguageStyle] = useState<AgentConfig['language_style']>(
     initial.language_style ?? 'formal',
@@ -98,6 +152,12 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
   const [forbiddenTopics, setForbiddenTopics] = useState<string[]>(initial.forbidden_topics ?? []);
   const [escalationTriggers, setEscalationTriggers] = useState<string[]>(
     initial.escalation_triggers ?? [],
+  );
+  const [llmProvider, setLlmProvider] = useState<NonNullable<AgentConfig['llm_provider']>>(
+    initial.llm_provider ?? 'anthropic',
+  );
+  const [llmModel, setLlmModel] = useState<string>(
+    initial.llm_model ?? 'claude-sonnet-4-6',
   );
 
   const [isPending, startTransition] = useTransition();
@@ -109,6 +169,12 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
     .replace(/^ws:/, 'http:')
     .replace(/^wss:/, 'https:')
     .replace(/\/ws$/, '');
+
+  // When switching provider, reset model to first option of the new provider
+  const handleProviderChange = (p: NonNullable<AgentConfig['llm_provider']>) => {
+    setLlmProvider(p);
+    setLlmModel(LLM_CONFIG[p].models[0].value);
+  };
 
   const handlePreview = async () => {
     setIsPreviewing(true);
@@ -143,6 +209,8 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
         forbidden_topics: forbiddenTopics.length > 0 ? forbiddenTopics : undefined,
         escalation_triggers: escalationTriggers.length > 0 ? escalationTriggers : undefined,
         language_style: languageStyle,
+        llm_provider: llmProvider,
+        llm_model: llmModel,
       };
       const result = await updateSellerAgentConfig(seller.id, config);
       if (result.error) {
@@ -158,7 +226,10 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
     'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white focus:border-indigo-300 transition-colors placeholder:text-slate-400';
   const labelClass = 'block text-xs font-medium text-slate-500 mb-1.5';
   const cardClass = 'bg-white rounded-2xl border border-slate-100 shadow-card p-6 space-y-5';
-  const sectionTitleClass = 'text-sm font-semibold text-slate-700 flex items-center gap-2 pb-1 border-b border-slate-100';
+  const sectionTitleClass =
+    'text-sm font-semibold text-slate-700 flex items-center gap-2 pb-1 border-b border-slate-100';
+
+  const currentModels = LLM_CONFIG[llmProvider].models;
 
   return (
     <div className="space-y-6 animate-fade-up max-w-2xl">
@@ -177,7 +248,7 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
         </div>
       </div>
 
-      {/* Card 1: Identidad */}
+      {/* Card 1: Identidad + Voz TTS */}
       <div className={cardClass}>
         <p className={sectionTitleClass}>
           <Bot size={14} className="text-indigo-400" />
@@ -200,7 +271,8 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
 
         <div className="space-y-2">
           <label className={labelClass} htmlFor="tts_voice">
-            Voz del agente
+            Voz del agente{' '}
+            <span className="font-normal text-slate-400">· Deepgram Aura 2</span>
           </label>
           <select
             id="tts_voice"
@@ -208,10 +280,14 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
             onChange={(e) => setTtsVoice(e.target.value)}
             className={inputClass}
           >
-            {TTS_VOICES.map((v) => (
-              <option key={v.value} value={v.value}>
-                {v.label} · {v.description}
-              </option>
+            {TTS_VOICE_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.voices.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label} · {v.gender}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -227,16 +303,64 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
               : 'text-indigo-600 bg-indigo-50 border-indigo-100 hover:bg-indigo-100',
           )}
         >
-          {isPreviewing ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Volume2 size={14} />
-          )}
+          {isPreviewing ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
           {isPreviewing ? 'Reproduciendo...' : '▶ Escuchar voz'}
         </button>
       </div>
 
-      {/* Card 2: Personalidad & Estilo */}
+      {/* Card 2: Modelo de IA */}
+      <div className={cardClass}>
+        <p className={sectionTitleClass}>
+          <Cpu size={14} className="text-violet-400" />
+          Modelo de IA para el guión
+        </p>
+
+        <div className="space-y-2">
+          <label className={labelClass}>Proveedor</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(LLM_CONFIG) as NonNullable<AgentConfig['llm_provider']>[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => handleProviderChange(p)}
+                className={cn(
+                  'px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-150 text-left',
+                  llmProvider === p
+                    ? 'bg-violet-50 border-violet-200 text-violet-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300',
+                )}
+              >
+                {LLM_CONFIG[p].label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className={labelClass} htmlFor="llm_model">
+            Modelo
+          </label>
+          <select
+            id="llm_model"
+            value={llmModel}
+            onChange={(e) => setLlmModel(e.target.value)}
+            className={inputClass}
+          >
+            {currentModels.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-400">
+            {llmProvider === 'openai'
+              ? 'Requiere OPENAI_API_KEY en el servidor de la API.'
+              : 'Usa la ANTHROPIC_API_KEY configurada en el servidor de la API.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Card 3: Personalidad & Estilo */}
       <div className={cardClass}>
         <p className={sectionTitleClass}>
           <span className="text-indigo-400 text-base leading-none">✦</span>
@@ -261,7 +385,7 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
           <label className={labelClass}>Estilo de lenguaje</label>
           <div className="flex gap-3">
             {LANGUAGE_STYLES.map((style) => (
-              <label key={style.value} className="flex items-center gap-2 cursor-pointer group">
+              <label key={style.value} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="language_style"
@@ -298,7 +422,7 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
         </div>
       </div>
 
-      {/* Card 3: Restricciones */}
+      {/* Card 4: Restricciones */}
       <div className={cardClass}>
         <p className={sectionTitleClass}>
           <span className="text-rose-400 text-base leading-none">⚑</span>
@@ -334,7 +458,7 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
         </div>
       </div>
 
-      {/* Save controls */}
+      {/* Save */}
       {saveError && (
         <div className="flex items-center gap-2.5 px-4 py-2.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-sm">
           <X size={14} className="flex-shrink-0 text-rose-400" />
@@ -353,11 +477,7 @@ export function AgentConfigForm({ seller }: AgentConfigFormProps) {
             : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-indigo-500/20',
         )}
       >
-        {isPending ? (
-          <Loader2 size={14} className="animate-spin" />
-        ) : savedOk ? (
-          <CheckCircle2 size={14} />
-        ) : null}
+        {isPending ? <Loader2 size={14} className="animate-spin" /> : savedOk ? <CheckCircle2 size={14} /> : null}
         {isPending ? 'Guardando...' : savedOk ? 'Guardado' : 'Guardar cambios'}
       </button>
     </div>
