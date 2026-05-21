@@ -3,7 +3,19 @@ import OpenAI from 'openai';
 import type { SessionContext, TranscriptEntry } from '../types.js';
 
 const anthropic = new Anthropic();
-const openaiClient = new OpenAI();
+
+// Lazy — only instantiated when a seller actually uses OpenAI as provider.
+// Avoids crashing the server at startup if OPENAI_API_KEY is not set.
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is not configured on this server.');
+    }
+    _openai = new OpenAI();
+  }
+  return _openai;
+}
 
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
@@ -98,7 +110,7 @@ async function streamOpenAI(
   userMessage: string,
   onChunk: (text: string) => void,
 ): Promise<string> {
-  const stream = await openaiClient.chat.completions.create({
+  const stream = await getOpenAI().chat.completions.create({
     model,
     max_tokens: 200,
     stream: true,
