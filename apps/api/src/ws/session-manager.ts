@@ -16,6 +16,8 @@ export class CallSession {
   private pendingUtterance: string[] = [];
   // True while agent TTS audio is being played — used to discard echo transcripts
   private isAgentSpeaking = false;
+  // Last few agent responses, used for content-based echo detection
+  private recentAgentTexts: string[] = [];
 
   constructor(private readonly ws: WebSocket) {}
 
@@ -110,6 +112,7 @@ export class CallSession {
 
       const entry: TranscriptEntry = { speaker: 'agent', text: introText, timestamp: Date.now() };
       this.transcript.push(entry);
+      this.recentAgentTexts = [introText, ...this.recentAgentTexts].slice(0, 3);
 
       this.send({ type: 'agent_intro', text: introText });
 
@@ -135,6 +138,13 @@ export class CallSession {
     // Discard anything transcribed while agent is speaking — it's echo
     if (this.isAgentSpeaking) return;
 
+    // Content-based echo detection: discard if it matches what the agent recently said.
+    // This catches echo that slips through after the speaking flag is cleared.
+    if (isFinal && this.isAgentEcho(transcript)) {
+      console.log('[Session] Echo discarded:', transcript.slice(0, 60));
+      return;
+    }
+
     // Send to frontend for live display
     this.send({
       type: 'transcript',
@@ -150,6 +160,29 @@ export class CallSession {
       // Accumulate speech_final segments — response fires only on UtteranceEnd
       this.pendingUtterance.push(transcript);
     }
+  }
+
+  // Returns true when `text` looks like a fragment of the agent's own recent speech.
+  private isAgentEcho(text: string): boolean {
+    const normalize = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '') // strip accents
+        .replace(/[¿¡.,!?;:«»]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const normText = normalize(text);
+    if (normText.length < 8) return false;
+
+    for (const agentText of this.recentAgentTexts) {
+      const normAgent = normalize(agentText);
+      if (normAgent.includes(normText) || normText.includes(normAgent)) return true;
+      // Partial match: first 20 chars of transcript found in agent text
+      if (normText.length >= 15 && normAgent.includes(normText.slice(0, 20))) return true;
+    }
+    return false;
   }
 
   // Called by Deepgram after utterance_end_ms of silence — the real end-of-turn signal
@@ -186,6 +219,7 @@ export class CallSession {
       if (fullText) {
         const entry: TranscriptEntry = { speaker: 'agent', text: fullText, timestamp: Date.now() };
         this.transcript.push(entry);
+        this.recentAgentTexts = [fullText, ...this.recentAgentTexts].slice(0, 3);
 
         this.send({ type: 'agent_response', text: fullText });
 
