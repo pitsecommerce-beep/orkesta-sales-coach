@@ -95,17 +95,27 @@ export function useCoachSocket({
                 isSpeakingRef.current = true;
                 setIsSpeaking(true);
 
-                source.onended = () => {
-                  activeSourceRef.current = null;
-                  // Keep mic muted briefly to absorb reverb / late echo
+                const resumeListening = () => {
+                  if (postSpeakTimerRef.current) clearTimeout(postSpeakTimerRef.current);
                   postSpeakTimerRef.current = setTimeout(() => {
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
-                    // Notify backend so it resumes listening
                     if (wsRef.current?.readyState === WebSocket.OPEN) {
                       wsRef.current.send(JSON.stringify({ type: 'tts_ended' }));
                     }
                   }, POST_SPEAK_COOLDOWN_MS);
+                };
+
+                // Safety timeout: resume listening even if onended never fires
+                const safetyTimer = setTimeout(
+                  resumeListening,
+                  audioBuffer.duration * 1000 + 2500,
+                );
+
+                source.onended = () => {
+                  clearTimeout(safetyTimer);
+                  activeSourceRef.current = null;
+                  resumeListening();
                 };
 
                 source.start();
@@ -114,6 +124,10 @@ export function useCoachSocket({
                 console.error('[Audio playback]', err);
                 isSpeakingRef.current = false;
                 setIsSpeaking(false);
+                // Notify backend so it doesn't stay blocked waiting for tts_ended
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  wsRef.current.send(JSON.stringify({ type: 'tts_ended' }));
+                }
               }
             })();
           }
