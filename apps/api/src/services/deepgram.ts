@@ -10,7 +10,6 @@ export function createDeepgramStream(
   const connection = deepgram.listen.live({
     model: 'nova-2',
     language: 'es',
-    diarize: true,
     punctuate: true,
     smart_format: true,
     encoding: 'opus',

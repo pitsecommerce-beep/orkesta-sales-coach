@@ -7,11 +7,12 @@ import type { TranscriptEntry } from '@/lib/types';
 interface TranscriptFeedProps {
   entries: TranscriptEntry[];
   liveText?: string;
-  liveSpeaker?: 'seller' | 'client';
+  liveSpeaker?: 'agent' | 'client';
   isActive: boolean;
+  agentName?: string;
 }
 
-export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive }: TranscriptFeedProps) {
+export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive, agentName = 'Agente' }: TranscriptFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive }: Tra
         )}
 
         {entries.map((entry, i) => (
-          <TranscriptBubble key={i} entry={entry} />
+          <TranscriptBubble key={i} entry={entry} agentName={agentName} />
         ))}
 
         {/* Live interim text */}
@@ -74,24 +75,24 @@ export function TranscriptFeed({ entries, liveText, liveSpeaker, isActive }: Tra
   );
 }
 
-function TranscriptBubble({ entry }: { entry: TranscriptEntry }) {
-  const isSeller = entry.speaker === 'seller';
+function TranscriptBubble({ entry, agentName }: { entry: TranscriptEntry; agentName: string }) {
+  const isAgent = entry.speaker === 'agent';
 
   return (
-    <div className={cn('flex animate-slide-in', isSeller ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex animate-slide-in', isAgent ? 'justify-end' : 'justify-start')}>
       <div className="max-w-[80%]">
         <p
           className={cn(
             'text-[10px] font-bold mb-1.5 uppercase tracking-wide',
-            isSeller ? 'text-right text-indigo-400' : 'text-left text-amber-500',
+            isAgent ? 'text-right text-indigo-400' : 'text-left text-amber-500',
           )}
         >
-          {isSeller ? 'Tú' : 'Cliente'}
+          {isAgent ? agentName : 'Cliente'}
         </p>
         <div
           className={cn(
             'px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed',
-            isSeller
+            isAgent
               ? 'bg-indigo-50 text-indigo-900 border border-indigo-100'
               : 'bg-slate-50 text-slate-700 border border-slate-100',
           )}

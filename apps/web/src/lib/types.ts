@@ -63,12 +63,12 @@ export interface Call {
 }
 
 export interface TranscriptEntry {
-  speaker: 'seller' | 'client';
+  speaker: 'agent' | 'client';
   text: string;
   timestamp: number;
 }
 
-export interface Suggestion {
+export interface AgentResponse {
   text: string;
   timestamp: number;
 }
@@ -76,15 +76,15 @@ export interface Suggestion {
 // WebSocket messages: Client → Server
 export type ClientMessage =
   | { type: 'start_session'; clientId: string; productId: string; sellerId: string }
-  | { type: 'end_session' }
-  | { type: 'set_seller_speaker'; speakerId: number };
+  | { type: 'end_session' };
 
 // WebSocket messages: Server → Client
 export type ServerMessage =
   | { type: 'session_started'; callId: string }
-  | { type: 'transcript'; text: string; speaker: 'seller' | 'client'; speakerId: number; isFinal: boolean; timestamp: number }
-  | { type: 'suggestion_chunk'; text: string }
-  | { type: 'suggestion_complete'; text: string }
-  | { type: 'suggestion_audio_ready' }
+  | { type: 'agent_intro'; text: string }
+  | { type: 'transcript'; text: string; speaker: 'agent' | 'client'; isFinal: boolean; timestamp: number }
+  | { type: 'agent_chunk'; text: string }
+  | { type: 'agent_response'; text: string }
+  | { type: 'agent_audio_ready' }
   | { type: 'session_ended' }
   | { type: 'error'; message: string };
