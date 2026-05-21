@@ -87,5 +87,6 @@ export type ServerMessage =
   | { type: 'agent_chunk'; text: string }
   | { type: 'agent_response'; text: string }
   | { type: 'agent_audio_ready' }
+  | { type: 'barge_in' }
   | { type: 'session_ended' }
   | { type: 'error'; message: string };

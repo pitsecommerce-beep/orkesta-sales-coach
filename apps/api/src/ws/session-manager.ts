@@ -11,6 +11,7 @@ export class CallSession {
   private transcript: TranscriptEntry[] = [];
   private callId: string | null = null;
   private deepgramConn: LiveClient | null = null;
+  private keepAliveInterval: ReturnType<typeof setInterval> | null = null;
   private isGeneratingResponse = false;
   // Accumulates speech_final segments until UtteranceEnd confirms turn is over
   private pendingUtterance: string[] = [];
@@ -40,8 +41,6 @@ export class CallSession {
       return;
     }
 
-    console.log('[Session] Message received:', msg.type);
-
     switch (msg.type) {
       case 'start_session':
         await this.startSession(msg.clientId, msg.productId, msg.sellerId);
@@ -50,9 +49,7 @@ export class CallSession {
         await this.endSession();
         break;
       case 'tts_ended':
-        // Frontend signals TTS playback finished — agent can listen again
         this.isAgentSpeaking = false;
-        console.log('[Session] TTS playback ended, resuming listening');
         break;
     }
   }
@@ -93,10 +90,9 @@ export class CallSession {
       this.callId = call.id as string;
 
       this.startDeepgram();
-      console.log('[Session] Started successfully, callId:', this.callId);
+      console.log('[Session] Started, callId:', this.callId);
       this.send({ type: 'session_started', callId: this.callId });
 
-      // Agent introduces itself immediately after session starts
       this.sendAgentIntroduction().catch((err: unknown) => console.error('[Intro]', err));
     } catch (err) {
       console.error('[Session] Failed to start:', err);
@@ -130,22 +126,38 @@ export class CallSession {
       (err) => this.send({ type: 'error', message: `Transcripción: ${err.message}` }),
       () => console.log('[Session] Deepgram closed'),
     );
+
+    // KeepAlive every 8s prevents Deepgram from closing during quiet periods
+    this.keepAliveInterval = setInterval(() => {
+      try { this.deepgramConn?.keepAlive(); } catch { /* ignore */ }
+    }, 8000);
   }
 
   private async onTranscript(transcript: string, _words: DeepgramWord[], isFinal: boolean) {
     if (!transcript.trim()) return;
 
-    // Discard anything transcribed while agent is speaking — it's echo
-    if (this.isAgentSpeaking) return;
+    if (this.isAgentSpeaking) {
+      // Echo check: content matches recent agent speech → discard silently
+      if (this.isAgentEcho(transcript)) return;
 
-    // Content-based echo detection: discard if it matches what the agent recently said.
-    // This catches echo that slips through after the speaking flag is cleared.
-    if (isFinal && this.isAgentEcho(transcript)) {
-      console.log('[Session] Echo discarded:', transcript.slice(0, 60));
-      return;
+      // Non-echo speech while agent is talking → barge-in
+      // Only act on final segments with enough content to be intentional
+      if (isFinal && transcript.trim().length >= 8) {
+        console.log('[Session] Barge-in:', transcript.slice(0, 60));
+        this.isAgentSpeaking = false;
+        this.send({ type: 'barge_in' });
+        // Fall through to process as normal client speech
+      } else {
+        return;
+      }
+    } else {
+      // Content-based echo detection after speaking flag cleared (hardware reverb)
+      if (isFinal && this.isAgentEcho(transcript)) {
+        console.log('[Session] Late echo discarded:', transcript.slice(0, 60));
+        return;
+      }
     }
 
-    // Send to frontend for live display
     this.send({
       type: 'transcript',
       text: transcript,
@@ -157,18 +169,17 @@ export class CallSession {
     if (isFinal) {
       const entry: TranscriptEntry = { speaker: 'client', text: transcript, timestamp: Date.now() };
       this.transcript.push(entry);
-      // Accumulate speech_final segments — response fires only on UtteranceEnd
       this.pendingUtterance.push(transcript);
     }
   }
 
-  // Returns true when `text` looks like a fragment of the agent's own recent speech.
+  // Returns true when text looks like a fragment of the agent's own recent speech.
   private isAgentEcho(text: string): boolean {
     const normalize = (s: string) =>
       s
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '') // strip accents
+        .replace(/[̀-ͯ]/g, '')
         .replace(/[¿¡.,!?;:«»]/g, '')
         .replace(/\s+/g, ' ')
         .trim();
@@ -187,13 +198,13 @@ export class CallSession {
       const maxLen = Math.max(normText.length, normAgent.length);
       if (minLen / maxLen < 0.5) continue;
       if (normAgent.includes(normText) || normText.includes(normAgent)) return true;
+      if (normText.length >= 15 && normAgent.includes(normText.slice(0, 20))) return true;
     }
     return false;
   }
 
-  // Called by Deepgram after utterance_end_ms of silence — the real end-of-turn signal
+  // Called by Deepgram after utterance_end_ms of silence — real end-of-turn signal.
   private async onUtteranceEnd() {
-    // If agent is still speaking, discard any echo that leaked through
     if (this.isAgentSpeaking) {
       this.pendingUtterance = [];
       return;
@@ -255,18 +266,18 @@ export class CallSession {
       if (this.ws.readyState === 1) {
         this.ws.send(audioBuffer);
       }
-      // Safety timeout: clear isAgentSpeaking if tts_ended never arrives from frontend.
-      // Estimate ~80ms per character + 3s buffer, capped at 30s.
+      // Safety: clear isAgentSpeaking after estimated duration + buffer
+      // in case tts_ended never arrives (e.g. network drop, browser tab hidden)
       const safetyMs = Math.min(30000, Math.max(5000, text.length * 80 + 3000));
       setTimeout(() => { this.isAgentSpeaking = false; }, safetyMs);
     } catch (err) {
-      // Reset immediately so the agent can still listen after a TTS failure
       this.isAgentSpeaking = false;
       throw err;
     }
   }
 
   private async endSession() {
+    this.stopKeepAlive();
     this.deepgramConn?.finish();
     this.deepgramConn = null;
 
@@ -290,6 +301,7 @@ export class CallSession {
   }
 
   async cleanup() {
+    this.stopKeepAlive();
     this.deepgramConn?.finish();
     if (this.callId) {
       await supabase
@@ -297,6 +309,13 @@ export class CallSession {
         .update({ status: 'failed', ended_at: new Date().toISOString() })
         .eq('id', this.callId)
         .eq('status', 'active');
+    }
+  }
+
+  private stopKeepAlive() {
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
     }
   }
 
