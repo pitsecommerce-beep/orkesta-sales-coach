@@ -7,8 +7,13 @@ import { ttsPreviewRoute } from './routes/tts-preview.js';
 
 const server = Fastify({ logger: { level: 'info' } });
 
+// Normalize origin: Railway env vars are sometimes set without the https:// prefix
+const rawOrigin = process.env.ALLOWED_ORIGIN ?? '*';
+const corsOrigin =
+  rawOrigin !== '*' && !rawOrigin.startsWith('http') ? `https://${rawOrigin}` : rawOrigin;
+
 await server.register(fastifyCors, {
-  origin: process.env.ALLOWED_ORIGIN ?? '*',
+  origin: corsOrigin,
 });
 
 await server.register(fastifyWebsocket);

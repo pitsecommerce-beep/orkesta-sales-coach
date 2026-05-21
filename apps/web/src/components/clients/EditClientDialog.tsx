@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, Loader2, User, Building2, Briefcase, Mail, Phone, AlertCircle, FileText, Package, Pencil } from 'lucide-react';
 import { updateClientAction } from '@/app/actions';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ interface EditClientDialogProps {
 export function EditClientDialog({ client, products, onClose }: EditClientDialogProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState('');
+  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -41,6 +43,7 @@ export function EditClientDialog({ client, products, onClose }: EditClientDialog
       if (result.error) {
         setError(result.error);
       } else {
+        router.refresh();
         onClose();
       }
     });

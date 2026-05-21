@@ -174,13 +174,19 @@ export class CallSession {
         .trim();
 
     const normText = normalize(text);
-    if (normText.length < 8) return false;
+    // Short responses ("sí", "ok", "entendido", etc.) are never echo — only check
+    // substantial transcripts that could realistically be a re-capture of TTS audio.
+    if (normText.length < 25) return false;
 
     for (const agentText of this.recentAgentTexts) {
       const normAgent = normalize(agentText);
+      // Require the two texts to be of similar length before doing substring checks.
+      // This prevents common short user phrases (e.g. "para conocer cómo")
+      // from being falsely flagged just because they appear inside a long agent sentence.
+      const minLen = Math.min(normText.length, normAgent.length);
+      const maxLen = Math.max(normText.length, normAgent.length);
+      if (minLen / maxLen < 0.5) continue;
       if (normAgent.includes(normText) || normText.includes(normAgent)) return true;
-      // Partial match: first 20 chars of transcript found in agent text
-      if (normText.length >= 15 && normAgent.includes(normText.slice(0, 20))) return true;
     }
     return false;
   }
