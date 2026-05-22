@@ -13,6 +13,7 @@ export class CallSession {
   private deepgramConn: LiveClient | null = null;
   private keepAliveInterval: ReturnType<typeof setInterval> | null = null;
   private isGeneratingResponse = false;
+  private currentResponseController: AbortController | null = null;
   // Accumulates speech_final segments until UtteranceEnd confirms turn is over
   private pendingUtterance: string[] = [];
   // True while agent TTS audio is being played — used to discard echo transcripts
@@ -170,7 +171,23 @@ export class CallSession {
       const entry: TranscriptEntry = { speaker: 'client', text: transcript, timestamp: Date.now() };
       this.transcript.push(entry);
       this.pendingUtterance.push(transcript);
+
+      // Client is still speaking while we were already generating — cancel stale response
+      if (this.isGeneratingResponse) {
+        this.interruptCurrentResponse();
+      }
     }
+  }
+
+  // Aborts the in-flight LLM stream so we can regenerate once the client truly finishes.
+  private interruptCurrentResponse() {
+    const controller = this.currentResponseController;
+    if (!controller) return;
+    console.log('[Session] Client still speaking — interrupting stale response');
+    controller.abort();
+    this.currentResponseController = null;
+    this.isGeneratingResponse = false;
+    this.send({ type: 'agent_response_cancelled' });
   }
 
   // Returns true when text looks like a fragment of the agent's own recent speech.
@@ -223,6 +240,9 @@ export class CallSession {
 
   private async generateAgentResponse(clientUtterance: string) {
     if (!this.context) return;
+
+    const controller = new AbortController();
+    this.currentResponseController = controller;
     this.isGeneratingResponse = true;
 
     try {
@@ -230,8 +250,16 @@ export class CallSession {
         this.context,
         this.transcript,
         clientUtterance,
-        (chunk) => this.send({ type: 'agent_chunk', text: chunk }),
+        (chunk) => {
+          if (!controller.signal.aborted) {
+            this.send({ type: 'agent_chunk', text: chunk });
+          }
+        },
+        controller.signal,
       );
+
+      // Cancelled mid-stream — discard result, don't save or send anything
+      if (controller.signal.aborted) return;
 
       if (fullText) {
         const entry: TranscriptEntry = { speaker: 'agent', text: fullText, timestamp: Date.now() };
@@ -252,9 +280,14 @@ export class CallSession {
         this.sendTtsAudio(fullText, voice).catch((err: unknown) => console.error('[TTS]', err));
       }
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error('[Session] Agent response error:', err);
     } finally {
-      this.isGeneratingResponse = false;
+      // Only reset if this controller is still active — a new response may have started
+      if (this.currentResponseController === controller) {
+        this.isGeneratingResponse = false;
+        this.currentResponseController = null;
+      }
     }
   }
 

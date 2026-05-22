@@ -71,6 +71,7 @@ export type ServerMessage =
   | { type: 'transcript'; text: string; speaker: 'agent' | 'client'; isFinal: boolean; timestamp: number }
   | { type: 'agent_chunk'; text: string }
   | { type: 'agent_response'; text: string }
+  | { type: 'agent_response_cancelled' }
   | { type: 'agent_audio_ready' }
   | { type: 'barge_in' }
   | { type: 'session_ended' }
