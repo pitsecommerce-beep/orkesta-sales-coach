@@ -4,6 +4,9 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { CallCoach } from '@/components/call/CallCoach';
 import type { Client, Product, Seller } from '@/lib/types';
 
+// Always fetch fresh seller config — persona name and voice can change between sessions.
+export const dynamic = 'force-dynamic';
+
 interface Props {
   params: { clientId: string };
   searchParams: { productId?: string };

@@ -20,6 +20,8 @@ export class CallSession {
   private isAgentSpeaking = false;
   // Last few agent responses, used for content-based echo detection
   private recentAgentTexts: string[] = [];
+  // Set during intentional teardown so the close handler doesn't reconnect
+  private isShuttingDown = false;
 
   constructor(private readonly ws: WebSocket) {}
 
@@ -125,7 +127,15 @@ export class CallSession {
       (transcript, words, isFinal) => this.onTranscript(transcript, words, isFinal),
       () => this.onUtteranceEnd(),
       (err) => this.send({ type: 'error', message: `Transcripción: ${err.message}` }),
-      () => console.log('[Session] Deepgram closed'),
+      () => {
+        console.log('[Session] Deepgram closed');
+        this.deepgramConn = null;
+        // Reconnect automatically if the session is still alive (unexpected drop)
+        if (!this.isShuttingDown && this.callId && this.ws.readyState === 1) {
+          console.log('[Session] Reconnecting Deepgram...');
+          this.startDeepgram();
+        }
+      },
     );
 
     // KeepAlive every 8s prevents Deepgram from closing during quiet periods
@@ -350,6 +360,7 @@ export class CallSession {
   }
 
   private async endSession() {
+    this.isShuttingDown = true;
     this.stopKeepAlive();
     this.deepgramConn?.finish();
     this.deepgramConn = null;
@@ -374,8 +385,10 @@ export class CallSession {
   }
 
   async cleanup() {
+    this.isShuttingDown = true;
     this.stopKeepAlive();
     this.deepgramConn?.finish();
+    this.deepgramConn = null;
     if (this.callId) {
       await supabase
         .from('calls')
