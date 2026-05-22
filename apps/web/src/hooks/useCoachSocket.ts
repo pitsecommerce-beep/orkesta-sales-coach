@@ -167,6 +167,14 @@ export function useCoachSocket({
             stopTts();
             break;
           case 'session_started':
+            // Pre-warm AudioContext so the first TTS doesn't pay initialization cost.
+            // session_started fires from a user-initiated action, so resume() is allowed.
+            if (!audioCtxRef.current) {
+              try {
+                audioCtxRef.current = new AudioContext();
+                audioCtxRef.current.resume().catch(() => { /* browser may defer until gesture */ });
+              } catch { /* ignore */ }
+            }
             onSessionStarted(msg.callId);
             break;
           case 'session_ended':

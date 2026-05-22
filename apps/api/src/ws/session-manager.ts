@@ -20,6 +20,8 @@ export class CallSession {
   private isAgentSpeaking = false;
   // Last few agent responses, used for content-based echo detection
   private recentAgentTexts: string[] = [];
+  // Set during intentional teardown so the close handler doesn't reconnect
+  private isShuttingDown = false;
 
   constructor(private readonly ws: WebSocket) {}
 
@@ -125,7 +127,15 @@ export class CallSession {
       (transcript, words, isFinal) => this.onTranscript(transcript, words, isFinal),
       () => this.onUtteranceEnd(),
       (err) => this.send({ type: 'error', message: `Transcripción: ${err.message}` }),
-      () => console.log('[Session] Deepgram closed'),
+      () => {
+        console.log('[Session] Deepgram closed');
+        this.deepgramConn = null;
+        // Reconnect automatically if the session is still alive (unexpected drop)
+        if (!this.isShuttingDown && this.callId && this.ws.readyState === 1) {
+          console.log('[Session] Reconnecting Deepgram...');
+          this.startDeepgram();
+        }
+      },
     );
 
     // KeepAlive every 8s prevents Deepgram from closing during quiet periods
@@ -245,6 +255,20 @@ export class CallSession {
     this.currentResponseController = controller;
     this.isGeneratingResponse = true;
 
+    const voice = this.context.seller.agent_config?.tts_voice ?? 'aura-asteria-es';
+    let pendingText = '';
+    const ttsTasks: Array<Promise<Buffer>> = [];
+
+    // Kick off TTS synthesis for a sentence segment as soon as it's complete,
+    // so Deepgram processes it in parallel while Claude generates the rest.
+    const flushSentence = (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed) ttsTasks.push(synthesizeSpeech(trimmed, voice));
+    };
+
+    // Matches the first complete sentence (non-greedy up to .!?; then optional whitespace).
+    const sentenceRe = /^(.*?[.!?;]+)(\s|$)/;
+
     try {
       const fullText = await streamAgentResponse(
         this.context,
@@ -253,6 +277,13 @@ export class CallSession {
         (chunk) => {
           if (!controller.signal.aborted) {
             this.send({ type: 'agent_chunk', text: chunk });
+            pendingText += chunk;
+            // Extract and flush every complete sentence found so far
+            let m: RegExpExecArray | null;
+            while ((m = sentenceRe.exec(pendingText)) !== null) {
+              flushSentence(m[1]);
+              pendingText = pendingText.slice(m[1].length + m[2].length).trimStart();
+            }
           }
         },
         controller.signal,
@@ -276,8 +307,10 @@ export class CallSession {
           timestamp: entry.timestamp,
         });
 
-        const voice = this.context?.seller.agent_config?.tts_voice ?? 'aura-asteria-es';
-        this.sendTtsAudio(fullText, voice).catch((err: unknown) => console.error('[TTS]', err));
+        // Flush any trailing text that didn't end with a sentence boundary
+        flushSentence(pendingText);
+
+        this.sendTtsFromTasks(ttsTasks, fullText).catch((err: unknown) => console.error('[TTS]', err));
       }
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -291,6 +324,25 @@ export class CallSession {
     }
   }
 
+  // Awaits all sentence-level TTS tasks (started in parallel), concatenates their
+  // MP3 buffers, and sends the combined audio to the client.
+  private async sendTtsFromTasks(tasks: Array<Promise<Buffer>>, fullText: string): Promise<void> {
+    this.isAgentSpeaking = true;
+    try {
+      const buffers = await Promise.all(tasks);
+      const audioBuffer = Buffer.concat(buffers);
+      this.send({ type: 'agent_audio_ready' });
+      if (this.ws.readyState === 1) {
+        this.ws.send(audioBuffer);
+      }
+      const safetyMs = Math.min(30000, Math.max(5000, fullText.length * 80 + 3000));
+      setTimeout(() => { this.isAgentSpeaking = false; }, safetyMs);
+    } catch (err) {
+      this.isAgentSpeaking = false;
+      throw err;
+    }
+  }
+
   private async sendTtsAudio(text: string, voice: string): Promise<void> {
     this.isAgentSpeaking = true;
     try {
@@ -299,8 +351,6 @@ export class CallSession {
       if (this.ws.readyState === 1) {
         this.ws.send(audioBuffer);
       }
-      // Safety: clear isAgentSpeaking after estimated duration + buffer
-      // in case tts_ended never arrives (e.g. network drop, browser tab hidden)
       const safetyMs = Math.min(30000, Math.max(5000, text.length * 80 + 3000));
       setTimeout(() => { this.isAgentSpeaking = false; }, safetyMs);
     } catch (err) {
@@ -310,6 +360,7 @@ export class CallSession {
   }
 
   private async endSession() {
+    this.isShuttingDown = true;
     this.stopKeepAlive();
     this.deepgramConn?.finish();
     this.deepgramConn = null;
@@ -334,8 +385,10 @@ export class CallSession {
   }
 
   async cleanup() {
+    this.isShuttingDown = true;
     this.stopKeepAlive();
     this.deepgramConn?.finish();
+    this.deepgramConn = null;
     if (this.callId) {
       await supabase
         .from('calls')
