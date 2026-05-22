@@ -63,6 +63,10 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
     setCurrentAgentChunk('');
   }, []);
 
+  const handleAgentResponseCancelled = useCallback(() => {
+    setCurrentAgentChunk('');
+  }, []);
+
   const handleAgentIntro = useCallback((text: string) => {
     // Add intro to transcript as agent entry
     setTranscript((prev) => [...prev, { speaker: 'agent', text, timestamp: Date.now() }]);
@@ -86,6 +90,7 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
     onTranscript: handleTranscript,
     onAgentChunk: handleAgentChunk,
     onAgentResponse: handleAgentResponse,
+    onAgentResponseCancelled: handleAgentResponseCancelled,
     onAgentIntro: handleAgentIntro,
     onSessionStarted: handleSessionStarted,
     onSessionEnded: handleSessionEnded,

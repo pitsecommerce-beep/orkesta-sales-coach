@@ -65,6 +65,7 @@ export async function streamAgentResponse(
   recentTranscript: TranscriptEntry[],
   clientUtterance: string,
   onChunk: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const provider = context.seller.agent_config?.llm_provider ?? 'anthropic';
   const model = context.seller.agent_config?.llm_model ?? DEFAULT_ANTHROPIC_MODEL;
@@ -79,9 +80,9 @@ export async function streamAgentResponse(
   const userMessage = `Conversación reciente:\n${transcriptBlock}\n\nEl cliente acaba de decir: "${clientUtterance}"\n\n¿Qué respondes tú como agente?`;
 
   if (provider === 'openai') {
-    return streamOpenAI(model, systemPrompt, userMessage, onChunk);
+    return streamOpenAI(model, systemPrompt, userMessage, onChunk, signal);
   }
-  return streamAnthropic(model, systemPrompt, userMessage, onChunk);
+  return streamAnthropic(model, systemPrompt, userMessage, onChunk, signal);
 }
 
 export async function generateIntroduction(context: SessionContext): Promise<string> {
@@ -105,20 +106,29 @@ async function streamAnthropic(
   systemPrompt: string,
   userMessage: string,
   onChunk: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const stream = anthropic.messages.stream({
-    model,
-    max_tokens: 250,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
   let fullText = '';
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      fullText += event.delta.text;
-      onChunk(event.delta.text);
+  try {
+    const stream = anthropic.messages.stream(
+      {
+        model,
+        max_tokens: 250,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      },
+      { signal },
+    );
+
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        fullText += event.delta.text;
+        onChunk(event.delta.text);
+      }
     }
+  } catch (err) {
+    if (signal?.aborted) return fullText;
+    throw err;
   }
   return fullText;
 }
@@ -128,24 +138,33 @@ async function streamOpenAI(
   systemPrompt: string,
   userMessage: string,
   onChunk: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const stream = await getOpenAI().chat.completions.create({
-    model,
-    max_tokens: 250,
-    stream: true,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ],
-  });
-
   let fullText = '';
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content ?? '';
-    if (delta) {
-      fullText += delta;
-      onChunk(delta);
+  try {
+    const stream = await getOpenAI().chat.completions.create(
+      {
+        model,
+        max_tokens: 250,
+        stream: true,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+      },
+      { signal },
+    );
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? '';
+      if (delta) {
+        fullText += delta;
+        onChunk(delta);
+      }
     }
+  } catch (err) {
+    if (signal?.aborted) return fullText;
+    throw err;
   }
   return fullText;
 }

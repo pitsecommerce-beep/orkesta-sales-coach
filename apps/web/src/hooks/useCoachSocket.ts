@@ -7,6 +7,7 @@ interface UseCoachSocketOptions {
   onTranscript: (msg: Extract<ServerMessage, { type: 'transcript' }>) => void;
   onAgentChunk: (text: string) => void;
   onAgentResponse: (text: string) => void;
+  onAgentResponseCancelled: () => void;
   onAgentIntro: (text: string) => void;
   onSessionStarted: (callId: string) => void;
   onSessionEnded: () => void;
@@ -22,6 +23,7 @@ export function useCoachSocket({
   onTranscript,
   onAgentChunk,
   onAgentResponse,
+  onAgentResponseCancelled,
   onAgentIntro,
   onSessionStarted,
   onSessionEnded,
@@ -151,6 +153,9 @@ export function useCoachSocket({
           case 'agent_response':
             onAgentResponse(msg.text);
             break;
+          case 'agent_response_cancelled':
+            onAgentResponseCancelled();
+            break;
           case 'agent_intro':
             onAgentIntro(msg.text);
             break;
@@ -175,7 +180,7 @@ export function useCoachSocket({
 
       wsRef.current = ws;
     });
-  }, [onTranscript, onAgentChunk, onAgentResponse, onAgentIntro, onSessionStarted, onSessionEnded, onError, onConnectError, stopTts]);
+  }, [onTranscript, onAgentChunk, onAgentResponse, onAgentResponseCancelled, onAgentIntro, onSessionStarted, onSessionEnded, onError, onConnectError, stopTts]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();
