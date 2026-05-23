@@ -171,6 +171,72 @@ async function streamOpenAI(
   return fullText;
 }
 
+export async function generateOpeningScript(
+  context: SessionContext,
+  onChunk: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const { client, product, seller, pastCalls } = context;
+  const config = seller.agent_config;
+  const personaName = config?.persona_name || seller.name || 'Vendedor';
+  const provider = config?.llm_provider ?? 'anthropic';
+  const model = config?.llm_model ?? DEFAULT_ANTHROPIC_MODEL;
+
+  const pastCallsSummary =
+    pastCalls.length > 0
+      ? pastCalls
+          .map(
+            (c) =>
+              `- ${new Date(c.created_at).toLocaleDateString('es-MX')}: ${c.ai_notes ?? 'Sin notas'} | Resultado: ${c.outcome ?? 'No registrado'}`,
+          )
+          .join('\n')
+      : null;
+
+  const systemPrompt = `Eres un coach de ventas experto. Tu trabajo es generar guiones de venta detallados, naturales y listos para ejecutar.
+
+VENDEDOR: ${personaName}${config?.sales_methodology ? `\nMETODOLOGÍA: ${config.sales_methodology}` : ''}
+TONO: ${config?.language_style === 'formal' ? 'formal y profesional' : config?.language_style === 'tecnico' ? 'técnico y preciso' : 'cercano y natural'}
+${config?.forbidden_topics?.length ? `TEMAS A EVITAR: ${config.forbidden_topics.join(', ')}` : ''}
+PRODUCTO: ${product.name} — ${product.description}
+- Características: ${product.features.join(', ')}
+- Precio sugerido: $${product.suggested_price.toLocaleString()} MXN | Mínimo: $${product.min_price.toLocaleString()} MXN${product.pricing_model ? `\n- Modelo comercial: ${product.pricing_model}` : ''}`;
+
+  const userMessage = `Genera el guion de apertura completo para una llamada de ventas de ${personaName} con:
+
+CLIENTE: ${client.name}
+EMPRESA: ${client.company} (${client.industry})
+PAIN POINTS CONOCIDOS: ${client.pain_points || 'No especificados'}
+NOTAS: ${client.notes || 'Ninguna'}${client.current_plan ? `\nPLAN ACTUAL: ${JSON.stringify(client.current_plan)}` : ''}
+${pastCallsSummary ? `\nHISTORIAL DE LLAMADAS ANTERIORES:\n${pastCallsSummary}` : ''}
+
+Genera el guion con EXACTAMENTE este formato (sin variaciones, sin texto extra):
+
+**APERTURA**
+[Saludo y presentación inicial, 2-3 oraciones naturales. Menciona el nombre del cliente y abre con algo relevante a su contexto]
+
+**PREGUNTAS DE DESCUBRIMIENTO**
+[3-4 preguntas abiertas para profundizar en sus necesidades. Deben fluir naturalmente]
+• [Pregunta 1]
+• [Pregunta 2]
+• [Pregunta 3]
+• [Pregunta 4 si aplica]
+
+**PROPUESTA DE VALOR**
+[Cómo presentar el producto conectando sus características con los pain points específicos de este cliente. 3-4 oraciones]
+
+**OBJECIONES PROBABLES**
+• [Objeción más probable]: [Respuesta concreta de 1-2 oraciones]
+• [Segunda objeción probable]: [Respuesta concreta de 1-2 oraciones]
+
+**CIERRE**
+[Frase o pregunta de cierre específica para este cliente, orientada al siguiente paso concreto]`;
+
+  if (provider === 'openai') {
+    return streamOpenAI(model, systemPrompt, userMessage, onChunk, signal, 900);
+  }
+  return streamAnthropic(model, systemPrompt, userMessage, onChunk, signal, 900);
+}
+
 export async function generateSalesScript(
   context: SessionContext,
   recentTranscript: TranscriptEntry[],

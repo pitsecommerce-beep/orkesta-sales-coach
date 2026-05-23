@@ -35,6 +35,9 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
   const [scripts, setScripts] = useState<AgentResponse[]>([]);
   const [currentScriptChunk, setCurrentScriptChunk] = useState('');
   const [isScriptListening, setIsScriptListening] = useState(false);
+  const [openingScript, setOpeningScript] = useState<string | null>(null);
+  const [openingScriptChunk, setOpeningScriptChunk] = useState('');
+  const [isGeneratingOpening, setIsGeneratingOpening] = useState(false);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -49,6 +52,48 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
   }, []);
 
   useEffect(() => () => stopTimer(), [stopTimer]);
+
+  const handleGenerateOpening = useCallback(async () => {
+    if (isGeneratingOpening) return;
+    setIsGeneratingOpening(true);
+    setOpeningScript(null);
+    setOpeningScriptChunk('');
+    try {
+      const wsUrl = process.env.NEXT_PUBLIC_API_WS_URL ?? 'ws://localhost:3001/ws';
+      const apiUrl = wsUrl
+        .replace(/^wss:\/\//, 'https://')
+        .replace(/^ws:\/\//, 'http://')
+        .replace(/\/ws$/, '');
+
+      const res = await fetch(`${apiUrl}/opening-script`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: client.id, productId: product.id, sellerId }),
+      });
+
+      if (!res.ok || !res.body) throw new Error('Error del servidor al generar el guion.');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        setOpeningScriptChunk(fullText);
+      }
+
+      setOpeningScript(fullText);
+      setOpeningScriptChunk('');
+    } catch (err) {
+      console.error('[Opening script]', err);
+      setServerError(err instanceof Error ? err.message : 'Error al generar el guion de apertura.');
+    } finally {
+      setIsGeneratingOpening(false);
+    }
+  }, [isGeneratingOpening, client.id, product.id, sellerId]);
 
   const handleTranscript = useCallback((msg: Extract<ServerMessage, { type: 'transcript' }>) => {
     setLiveText(msg.isFinal ? '' : msg.text);
@@ -373,6 +418,11 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
             isListening={isScriptListening}
             isCallActive={isCallActive}
             onListen={handleScriptListen}
+            clientName={client.name}
+            openingScript={openingScript}
+            openingScriptChunk={openingScriptChunk}
+            isGeneratingOpening={isGeneratingOpening}
+            onGenerateOpening={handleGenerateOpening}
           />
         )}
       </div>
