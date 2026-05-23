@@ -8,6 +8,7 @@ import { useAudioCapture } from '@/hooks/useAudioCapture';
 import { useCoachSocket } from '@/hooks/useCoachSocket';
 import { TranscriptFeed } from './TranscriptFeed';
 import { AgentResponsePanel } from './AgentResponsePanel';
+import { ScriptPanel } from './ScriptPanel';
 import { AudioControls } from './AudioControls';
 import type { Client, Product, TranscriptEntry, AgentResponse, ServerMessage } from '@/lib/types';
 
@@ -28,6 +29,12 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
   const [duration, setDuration] = useState(0);
   const [serverError, setServerError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Script mode state
+  const [appMode, setAppMode] = useState<'agent' | 'script'>('agent');
+  const [scripts, setScripts] = useState<AgentResponse[]>([]);
+  const [currentScriptChunk, setCurrentScriptChunk] = useState('');
+  const [isScriptListening, setIsScriptListening] = useState(false);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -73,6 +80,21 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
     setAgentResponses((prev) => [...prev, { text, timestamp: Date.now() }]);
   }, []);
 
+  const handleScriptListening = useCallback(() => {
+    setIsScriptListening(true);
+  }, []);
+
+  const handleScriptChunk = useCallback((text: string) => {
+    setIsScriptListening(false);
+    setCurrentScriptChunk((prev) => prev + text);
+  }, []);
+
+  const handleScriptReady = useCallback((text: string) => {
+    setScripts((prev) => [...prev, { text, timestamp: Date.now() }]);
+    setCurrentScriptChunk('');
+    setIsScriptListening(false);
+  }, []);
+
   const handleSessionStarted = useCallback((_callId: string) => {}, []);
 
   const handleSessionEnded = useCallback(() => {
@@ -96,17 +118,38 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
     onSessionEnded: handleSessionEnded,
     onError: (msg) => { console.error('[Agent]', msg); setServerError(msg); },
     onConnectError: handleConnectError,
+    onScriptListening: handleScriptListening,
+    onScriptChunk: handleScriptChunk,
+    onScriptReady: handleScriptReady,
   });
 
   const { isRecording, error: audioError, startCapture, stopCapture } = useAudioCapture({
     onChunk: sendAudio,
   });
 
+  const handleSwitchMode = useCallback(
+    (mode: 'agent' | 'script') => {
+      setAppMode(mode);
+      setIsScriptListening(false);
+      setCurrentScriptChunk('');
+      sendMessage({ type: 'set_mode', mode });
+    },
+    [sendMessage],
+  );
+
+  const handleScriptListen = useCallback(() => {
+    setCurrentScriptChunk('');
+    sendMessage({ type: 'start_script_listen' });
+  }, [sendMessage]);
+
   const handleStartCall = useCallback(
     async (withSystemAudio: boolean) => {
       setTranscript([]);
       setAgentResponses([]);
       setCurrentAgentChunk('');
+      setScripts([]);
+      setCurrentScriptChunk('');
+      setIsScriptListening(false);
       setServerError(null);
       setIsCallActive(true);
       startTimer();
@@ -142,8 +185,33 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
             {[client.company, client.industry].filter(Boolean).join(' · ')}
           </p>
         </div>
-        <div className="text-xs text-slate-500 font-medium bg-white border border-slate-100 shadow-card px-3 py-1.5 rounded-lg">
-          {product.name}
+        <div className="flex items-center gap-3">
+          {/* Mode toggle */}
+          <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+            <button
+              onClick={() => handleSwitchMode('agent')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${
+                appMode === 'agent'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Modo Agente
+            </button>
+            <button
+              onClick={() => handleSwitchMode('script')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200 ${
+                appMode === 'script'
+                  ? 'bg-white text-amber-600 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Modo Guion
+            </button>
+          </div>
+          <div className="text-xs text-slate-500 font-medium bg-white border border-slate-100 shadow-card px-3 py-1.5 rounded-lg">
+            {product.name}
+          </div>
         </div>
       </div>
 
@@ -290,13 +358,23 @@ export function CallCoach({ client, product, sellerId, agentName = 'Agente' }: C
           agentName={agentName}
         />
 
-        {/* Agent responses panel */}
-        <AgentResponsePanel
-          responses={agentResponses}
-          currentChunk={currentAgentChunk}
-          isSpeaking={isSpeaking}
-          agentName={agentName}
-        />
+        {/* Right panel: Agent responses (agent mode) or Script panel (script mode) */}
+        {appMode === 'agent' ? (
+          <AgentResponsePanel
+            responses={agentResponses}
+            currentChunk={currentAgentChunk}
+            isSpeaking={isSpeaking}
+            agentName={agentName}
+          />
+        ) : (
+          <ScriptPanel
+            scripts={scripts}
+            currentChunk={currentScriptChunk}
+            isListening={isScriptListening}
+            isCallActive={isCallActive}
+            onListen={handleScriptListen}
+          />
+        )}
       </div>
 
       {/* Audio controls bar */}

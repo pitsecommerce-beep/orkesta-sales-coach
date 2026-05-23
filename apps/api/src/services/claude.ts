@@ -107,13 +107,14 @@ async function streamAnthropic(
   userMessage: string,
   onChunk: (text: string) => void,
   signal?: AbortSignal,
+  maxTokens = 250,
 ): Promise<string> {
   let fullText = '';
   try {
     const stream = anthropic.messages.stream(
       {
         model,
-        max_tokens: 250,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
       },
@@ -139,13 +140,14 @@ async function streamOpenAI(
   userMessage: string,
   onChunk: (text: string) => void,
   signal?: AbortSignal,
+  maxTokens = 250,
 ): Promise<string> {
   let fullText = '';
   try {
     const stream = await getOpenAI().chat.completions.create(
       {
         model,
-        max_tokens: 250,
+        max_tokens: maxTokens,
         stream: true,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -167,6 +169,51 @@ async function streamOpenAI(
     throw err;
   }
   return fullText;
+}
+
+export async function generateSalesScript(
+  context: SessionContext,
+  recentTranscript: TranscriptEntry[],
+  clientUtterance: string,
+  onChunk: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const { client, product, seller } = context;
+  const config = seller.agent_config;
+  const personaName = config?.persona_name || seller.name || 'Vendedor';
+  const provider = config?.llm_provider ?? 'anthropic';
+  const model = config?.llm_model ?? DEFAULT_ANTHROPIC_MODEL;
+
+  const systemPrompt = `Eres un coach de ventas experto. Tu trabajo es guiar al vendedor ${personaName} en tiempo real durante una llamada con un cliente.
+
+PRODUCTO:
+- Nombre: ${product.name}
+- Descripción: ${product.description}
+- Características clave: ${product.features.join(', ')}
+- Precio sugerido: $${product.suggested_price.toLocaleString()} MXN | Mínimo: $${product.min_price.toLocaleString()} MXN${product.pricing_model ? `\n- Modelo comercial: ${product.pricing_model}` : ''}
+${config?.sales_methodology ? `\nMETODOLOGÍA DE VENTAS: ${config.sales_methodology}` : ''}
+CLIENTE:
+- Nombre: ${client.name} | Empresa: ${client.company} (${client.industry})
+- Pain points: ${client.pain_points || 'No especificados'}
+- Notas: ${client.notes || 'Ninguna'}${client.current_plan ? `\n- Plan actual: ${JSON.stringify(client.current_plan)}` : ''}
+${config?.forbidden_topics?.length ? `\nTEMAS A EVITAR: ${config.forbidden_topics.join(', ')}` : ''}
+REGLAS DEL GUION:
+- El vendedor habla en español, tono ${config?.language_style === 'formal' ? 'formal y profesional' : config?.language_style === 'tecnico' ? 'técnico y preciso' : 'cercano y natural'}
+- El guion debe ser listo para leer casi palabra por palabra
+- Nunca sugerir precio menor a $${product.min_price.toLocaleString()} MXN
+- Máximo 3 puntos clave, concisos y accionables`;
+
+  const transcriptBlock = recentTranscript
+    .slice(-8)
+    .map((t) => `${t.speaker === 'agent' ? 'VENDEDOR' : 'CLIENTE'}: ${t.text}`)
+    .join('\n');
+
+  const userMessage = `${transcriptBlock ? `CONVERSACIÓN RECIENTE:\n${transcriptBlock}\n\n` : ''}EL CLIENTE ACABA DE DECIR:\n"${clientUtterance}"\n\nGenera el guion con EXACTAMENTE este formato (sin variaciones):\n\n**LO QUE EL CLIENTE QUIERE**\n[1 oración: qué necesita o le preocupa]\n\n**DI ESTO AHORA**\n[Guion exacto, 2-3 oraciones naturales y conversacionales que el vendedor puede decir de inmediato]\n\n**PUNTOS CLAVE**\n• [punto 1]\n• [punto 2]\n• [punto 3 si aplica]\n\n**CIERRE / MANEJO**\n[Si hay objeción evidente: cómo manejarla con una frase concreta. Si no: próximo paso específico a proponer]`;
+
+  if (provider === 'openai') {
+    return streamOpenAI(model, systemPrompt, userMessage, onChunk, signal, 700);
+  }
+  return streamAnthropic(model, systemPrompt, userMessage, onChunk, signal, 700);
 }
 
 export async function generateCallSummary(transcript: TranscriptEntry[]): Promise<string> {

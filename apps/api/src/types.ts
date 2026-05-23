@@ -62,7 +62,9 @@ export interface TranscriptEntry {
 export type ClientMessage =
   | { type: 'start_session'; clientId: string; productId: string; sellerId: string }
   | { type: 'end_session' }
-  | { type: 'tts_ended' };
+  | { type: 'tts_ended' }
+  | { type: 'set_mode'; mode: 'agent' | 'script' }
+  | { type: 'start_script_listen' };
 
 // Server → Client
 export type ServerMessage =
@@ -75,4 +77,7 @@ export type ServerMessage =
   | { type: 'agent_audio_ready' }
   | { type: 'barge_in' }
   | { type: 'session_ended' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'script_listening' }
+  | { type: 'script_chunk'; text: string }
+  | { type: 'script_ready'; text: string };

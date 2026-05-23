@@ -13,6 +13,9 @@ interface UseCoachSocketOptions {
   onSessionEnded: () => void;
   onError: (message: string) => void;
   onConnectError?: () => void;
+  onScriptListening?: () => void;
+  onScriptChunk?: (text: string) => void;
+  onScriptReady?: (text: string) => void;
 }
 
 // Brief pause after TTS finishes before telling the backend to resume listening.
@@ -29,6 +32,9 @@ export function useCoachSocket({
   onSessionEnded,
   onError,
   onConnectError,
+  onScriptListening,
+  onScriptChunk,
+  onScriptReady,
 }: UseCoachSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -183,12 +189,21 @@ export function useCoachSocket({
           case 'error':
             onError(msg.message);
             break;
+          case 'script_listening':
+            onScriptListening?.();
+            break;
+          case 'script_chunk':
+            onScriptChunk?.(msg.text);
+            break;
+          case 'script_ready':
+            onScriptReady?.(msg.text);
+            break;
         }
       };
 
       wsRef.current = ws;
     });
-  }, [onTranscript, onAgentChunk, onAgentResponse, onAgentResponseCancelled, onAgentIntro, onSessionStarted, onSessionEnded, onError, onConnectError, stopTts]);
+  }, [onTranscript, onAgentChunk, onAgentResponse, onAgentResponseCancelled, onAgentIntro, onSessionStarted, onSessionEnded, onError, onConnectError, stopTts, onScriptListening, onScriptChunk, onScriptReady]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();

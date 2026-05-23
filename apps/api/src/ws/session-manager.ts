@@ -1,7 +1,7 @@
 import type { WebSocket } from '@fastify/websocket';
 import type { LiveClient } from '@deepgram/sdk';
 import { createDeepgramStream, type DeepgramWord } from '../services/deepgram.js';
-import { streamAgentResponse, generateIntroduction, generateCallSummary } from '../services/claude.js';
+import { streamAgentResponse, generateIntroduction, generateCallSummary, generateSalesScript } from '../services/claude.js';
 import { synthesizeSpeech } from '../services/tts.js';
 import { supabase } from '../services/supabase.js';
 import type { SessionContext, TranscriptEntry, ClientMessage, ServerMessage } from '../types.js';
@@ -22,6 +22,11 @@ export class CallSession {
   private recentAgentTexts: string[] = [];
   // Set during intentional teardown so the close handler doesn't reconnect
   private isShuttingDown = false;
+  // 'agent': AI responds automatically | 'script': AI generates a coaching script for the human
+  private sessionMode: 'agent' | 'script' = 'agent';
+  // True when the salesperson pressed the listen button and we're waiting for the client's next utterance
+  private scriptListenArmed = false;
+  private isGeneratingScript = false;
 
   constructor(private readonly ws: WebSocket) {}
 
@@ -53,6 +58,22 @@ export class CallSession {
         break;
       case 'tts_ended':
         this.isAgentSpeaking = false;
+        break;
+      case 'set_mode':
+        this.sessionMode = msg.mode;
+        if (msg.mode === 'agent') {
+          this.scriptListenArmed = false;
+        }
+        if (this.isGeneratingResponse) {
+          this.interruptCurrentResponse();
+        }
+        break;
+      case 'start_script_listen':
+        if (!this.isGeneratingScript) {
+          this.scriptListenArmed = true;
+          this.pendingUtterance = [];
+          this.send({ type: 'script_listening' });
+        }
         break;
     }
   }
@@ -237,7 +258,7 @@ export class CallSession {
       return;
     }
 
-    if (this.pendingUtterance.length === 0 || this.isGeneratingResponse || !this.context) {
+    if (this.pendingUtterance.length === 0 || !this.context) {
       this.pendingUtterance = [];
       return;
     }
@@ -245,7 +266,40 @@ export class CallSession {
     const fullUtterance = this.pendingUtterance.join(' ').trim();
     this.pendingUtterance = [];
 
-    await this.generateAgentResponse(fullUtterance);
+    if (this.sessionMode === 'script') {
+      if (this.scriptListenArmed && !this.isGeneratingScript) {
+        this.scriptListenArmed = false;
+        await this.generateScript(fullUtterance);
+      }
+      // In script mode but not armed: transcript is still shown, no response generated
+    } else {
+      if (!this.isGeneratingResponse) {
+        await this.generateAgentResponse(fullUtterance);
+      }
+    }
+  }
+
+  private async generateScript(clientUtterance: string) {
+    if (!this.context) return;
+    this.isGeneratingScript = true;
+    try {
+      const fullText = await generateSalesScript(
+        this.context,
+        this.transcript,
+        clientUtterance,
+        (chunk) => {
+          this.send({ type: 'script_chunk', text: chunk });
+        },
+      );
+      if (fullText) {
+        this.send({ type: 'script_ready', text: fullText });
+      }
+    } catch (err) {
+      console.error('[Session] Script generation error:', err);
+      this.send({ type: 'error', message: 'Error al generar el guion de ventas.' });
+    } finally {
+      this.isGeneratingScript = false;
+    }
   }
 
   private async generateAgentResponse(clientUtterance: string) {
